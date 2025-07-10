@@ -24,7 +24,7 @@ sboot-gen module product_management
 sboot-gen module admin/user_management
 ```
 
-Individual Component Generation
+## Individual Component Generation
 
 ```bash
 # Generate just a service
