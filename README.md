@@ -2,6 +2,9 @@
 
 This CLI tool transforms your Spring Boot development workflow, making it as efficient and user-friendly as modern frontend frameworks while maintaining the robustness and patterns.
 
+<img width="2400" height="1600" alt="image" src="https://github.com/user-attachments/assets/b18c838f-632f-459d-ab20-e6201165a604" />
+
+
 ---
 
 ## Complete Module Generation
@@ -60,6 +63,9 @@ sboot-gen-config
 ---
 
 ## Features
+
+<img width="2400" height="1600" alt="image" src="https://github.com/user-attachments/assets/8f1c709e-d080-445d-86d2-03f48b461d45" />
+
 
 - 🎯 User-Friendly CLI
 -- Intuitive commands similar to Angular CLI
