@@ -2,12 +2,15 @@
 
 This CLI tool transforms your Spring Boot development workflow, making it as efficient and user-friendly as modern frontend frameworks while maintaining the robustness and patterns.
 
-<img width="2400" height="1600" alt="image" src="https://github.com/user-attachments/assets/b18c838f-632f-459d-ab20-e6201165a604" />
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/4fe352aa-0ebd-4754-8839-59afb361b389" />
 
+Just as a Swiss Army knife consolidates multiple essential tools into one compact, reliable instrument, sboot-gen consolidates all the repetitive coding tasks that Spring Boot developers face daily. Rather than manually creating entities, services, controllers, repositories, DTOs, and mappers—each requiring careful attention to boilerplate code and architectural patterns—developers can generate complete, production-ready modules with a single command.
 
 ---
 
 ## Complete Module Generation
+
+<img width="2400" height="1600" alt="image" src="https://github.com/user-attachments/assets/b18c838f-632f-459d-ab20-e6201165a604" />
 
 ```bash
 # Generate a complete user module
@@ -100,3 +103,12 @@ sboot-gen-config
 -- Template customization support
 
 ---
+
+## Conclusion
+
+This UX/UI developer-friendly demonstration positions sboot-gen as an indispensable tool that embodies the Swiss Army knife philosophy—providing everything Spring Boot developers need in one elegant, powerful package. The combination of interactive demonstration, compelling visual evidence, and comprehensive documentation creates a persuasive case for adoption while showcasing the tool's professional quality and practical benefits.
+
+The demonstration package successfully transforms a technical CLI tool into an approachable, desirable productivity enhancement that developers will want to integrate into their daily workflow. By emphasizing both immediate practical benefits and long-term architectural advantages, it appeals to developers, team leads, and technical decision-makers alike.
+
+---
+
