@@ -2,7 +2,7 @@
 
 This CLI tool transforms your Spring Boot development workflow, making it as efficient and user-friendly as modern frontend frameworks while maintaining the robustness and patterns.
 
-<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/4fe352aa-0ebd-4754-8839-59afb361b389" />
+<img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/4fe352aa-0ebd-4754-8839-59afb361b389" />
 
 Just as a Swiss Army knife consolidates multiple essential tools into one compact, reliable instrument, sboot-gen consolidates all the repetitive coding tasks that Spring Boot developers face daily. Rather than manually creating entities, services, controllers, repositories, DTOs, and mappers—each requiring careful attention to boilerplate code and architectural patterns—developers can generate complete, production-ready modules with a single command.
 
