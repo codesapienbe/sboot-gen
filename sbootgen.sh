@@ -6871,41 +6871,38 @@ show_install_banner() {
 
 # Main execution logic
 main() {
-  echo "DEBUG: main called with args: $#"
-  echo "DEBUG: BASH_SOURCE[0]: '${BASH_SOURCE[0]}'"
-  echo "DEBUG: 0: '${0}'"
-  # If script is being sourced, just define the function
-  if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
-    echo "DEBUG: Script is being sourced"
-    # Being sourced - define the sboot function
-    return 0
-  fi
-  echo "DEBUG: Script is being executed directly"
-
   # Check if script is running from temp directory (downloaded via curl) or piped
   local script_path="${BASH_SOURCE[0]}"
   local is_temp_execution=false
+  local is_sourced=false
 
-  # Check if running from /tmp file
-  if [[ "$script_path" =~ ^/tmp/ ]]; then
-    is_temp_execution=true
-    log_debug "Script running from temp directory: $script_path"
-  # Check if running from stdin (piped)
-  elif [[ -z "$script_path" ]] || [[ "$script_path" =~ ^/dev/fd/ ]]; then
+  # Check if running from stdin (piped) - stdin is not a terminal
+  if [[ ! -t 0 ]]; then
     is_temp_execution=true
     log_debug "Script running from pipe/stdin"
+  # Check if running from /tmp file
+  elif [[ "$script_path" =~ ^/tmp/ ]]; then
+    is_temp_execution=true
+    log_debug "Script running from temp directory: $script_path"
+  # Check if being sourced - BASH_SOURCE[0] exists as file and differs from $0
+  elif [[ -f "${BASH_SOURCE[0]}" ]] && [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    is_sourced=true
+    log_debug "Script is being sourced"
+  fi
+
+  # If script is being sourced, just define the function
+  if [[ "$is_sourced" == "true" ]]; then
+    return 0
   fi
 
   if [[ "$is_temp_execution" == "true" ]]; then
     # For temp execution, just run the command directly without installation
-    echo "DEBUG: Temp execution detected"
     if [[ $# -gt 0 ]]; then
       log_debug "Running sboot command directly from temp location"
       sboot "$@"
       exit $?
     else
       # No arguments - show help
-      echo "DEBUG: No arguments, showing help"
       show_install_banner
       print_usage
       echo
