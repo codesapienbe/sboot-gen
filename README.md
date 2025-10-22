@@ -208,7 +208,12 @@ All architectures include:
 # Required tools
 brew install spring-boot-cli maven docker curl git  # macOS
 # or
-sudo apt-get install spring-boot-cli maven docker.io curl git  # Ubuntu
+sudo apt-get install maven docker.io curl git  # Ubuntu
+
+# Install spring boot CLI with sdkman
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
 
 # Verify installations
 spring --version
