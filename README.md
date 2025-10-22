@@ -222,15 +222,27 @@ docker --version
 git --version
 ```
 
-### Installation
+### Usage Options
+
 Choose one of the following methods:
 
-#### 🚀 **Quick Install (Recommended)**
+#### 🚀 **One-Time Usage (No Installation - Recommended)**
 ```bash
-# One-liner installation - downloads to /tmp and installs automatically
-curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
+# Run directly without installation - perfect for CI/CD or testing
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- <architecture> <project-name>
+
+# Examples:
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- eda-kafka my-enterprise-app
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- --aws microservice my-microservice
 ```
-**Safe & Secure**: Downloads to `/tmp` first, then installs to avoid permission issues.
+
+#### 🔧 **Permanent Installation (Optional)**
+```bash
+# If you want permanent installation
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash
+# Then use: sboot <architecture> <project-name>
+```
+**Safe & Secure**: Downloads to `/tmp` first, runs directly without modifying your system.
 
 #### 📦 **Manual Installation**
 ```bash
@@ -295,16 +307,14 @@ Using package: io.github.codesapienbe.myawesomeapp
 
 ### Script Management
 ```bash
-# Check script version
+# One-time usage (no installation needed)
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- --version
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- --help
+
+# With permanent installation
 sboot --version
-
-# Get help
 sboot --help
-
-# Update to latest version
 sboot --update
-
-# Interactive installation menu
 sboot --install
 ```
 
@@ -312,17 +322,25 @@ sboot --install
 
 ### How It Works
 
-The script supports multiple installation and execution modes:
+The script supports multiple execution modes:
 
-#### **Method 1: Quick Install (`curl | bash`)**
+#### **Method 1: One-Time Usage (Recommended)**
+```bash
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- <command>
+```
+- Downloads script to `/tmp` (safe temporary location)
+- Executes directly without installation
+- No modifications to your system
+- Perfect for CI/CD pipelines and one-off usage
+
+#### **Method 2: Permanent Installation (Optional)**
 ```bash
 curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
 ```
-- Downloads script to `/tmp` (safe temporary location)
-- Executes installer from temp location
-- Moves script to `~/.sbootgen.sh` after validation
-- Adds sourcing to your shell profile (`~/.bashrc` or `~/.zshrc`)
-- sboot becomes available in all future shell sessions
+- Downloads script to `/tmp` first (safe)
+- Installs to `~/.sbootgen.sh` permanently
+- Adds sourcing to your shell profile
+- sboot becomes available in all future sessions
 
 #### **Method 2: Source Directly**
 ```bash
@@ -1088,14 +1106,23 @@ bash -n sbootgen.sh
 
 ## 🎯 Quick Start for Developers
 
-### **One-Command Installation**
+### **Zero-Installation Usage (Recommended)**
+```bash
+# Run directly without installation - perfect for CI/CD
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- eda-kafka my-enterprise-app
+
+# With cloud provider
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- --aws microservice my-microservice
+```
+
+### **Permanent Installation (Optional)**
 ```bash
 curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
 ```
 
 ### **Create Your First Project**
 ```bash
-# Interactive mode (recommended for beginners)
+# Interactive mode (with permanent installation)
 sboot
 
 # Or direct command
@@ -1106,8 +1133,8 @@ make build
 make run
 ```
 
-### **Available Everywhere**
-Once installed, `sboot` is available in all your terminal sessions - no need to reinstall or source anything!
+### **Zero System Impact**
+The recommended approach downloads to `/tmp` and runs directly - no modifications to your system, no additions to shell profiles, and easy cleanup when done.
 
 ### **AI Assistant Configuration**
 Configure which AI assistant rules to include:

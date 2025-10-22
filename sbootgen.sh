@@ -6882,17 +6882,20 @@ main() {
   if [[ "$script_path" =~ ^/tmp/ ]]; then
     log_debug "Script running from temp directory: $script_path"
 
-    # For temp execution, always do auto-install
-    if [[ -t 0 ]]; then
-      # Interactive terminal - show installation menu
-      show_install_banner
-      interactive_install
+    # For temp execution, just run the command directly without installation
+    if [[ $# -gt 0 ]]; then
+      log_debug "Running sboot command directly from temp location"
+      sboot "$@"
+      exit $?
     else
-      # Non-interactive (likely curl | bash) - auto-install
-      log_info "Auto-installing sboot..."
-      setup_local_installation
+      # No arguments - show help
+      show_install_banner
+      print_usage
+      echo
+      echo -e "${YLW}💡 Tip: Run 'curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash -s -- <command>'${CLR}"
+      echo -e "${YLW}   Or:  'bash <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh) <command>'${CLR}"
+      exit 0
     fi
-    exit $?
   fi
 
   # Script is being executed directly from permanent location
