@@ -6871,11 +6871,16 @@ show_install_banner() {
 
 # Main execution logic
 main() {
+  echo "DEBUG: main called with args: $#"
+  echo "DEBUG: BASH_SOURCE[0]: '${BASH_SOURCE[0]}'"
+  echo "DEBUG: 0: '${0}'"
   # If script is being sourced, just define the function
   if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    echo "DEBUG: Script is being sourced"
     # Being sourced - define the sboot function
     return 0
   fi
+  echo "DEBUG: Script is being executed directly"
 
   # Check if script is running from temp directory (downloaded via curl) or piped
   local script_path="${BASH_SOURCE[0]}"
