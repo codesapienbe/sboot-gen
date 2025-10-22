@@ -3269,6 +3269,12 @@ create_user_pom() {
             <scope>runtime</scope>
         </dependency>
 
+        <!-- OAuth2 Authorization Server -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-authorization-server</artifactId>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -3726,9 +3732,26 @@ jwt:
   secret: mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
   expiration: 86400000  # 24 hours in milliseconds
 
+# OAuth2 Authorization Server Configuration
+spring:
+  security:
+    oauth2:
+      authorizationserver:
+        client:
+          my-client:
+            registration:
+              client-id: "my-client"
+              client-secret: "{noop}secret"
+              client-authentication-methods: "client_secret_basic"
+              authorization-grant-types: "authorization_code,refresh_token"
+              redirect-uris: "http://127.0.0.1:8080/login/oauth2/code/my-client"
+              scopes: "openid,profile"
+        issuer-url: "http://localhost:8080"
+
 logging:
   level:
     org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
 
 management:
   endpoints:
@@ -4829,6 +4852,527 @@ create_gateway_pom() {
 EOF
 }
 
+create_gateway_application_yml() {
+  local service_dir="$1"
+
+  cat > "$service_dir/src/main/resources/application.yml" << EOF
+server:
+  port: 8083
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: local
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+        # User Service routes
+        - id: user-service
+          uri: http://localhost:8080
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - RewritePath=/api/v1/auth/(?<segment>.*), /api/v1/auth/\${segment}
+            - JwtAuthenticationFilter
+
+        # Producer Service routes
+        - id: producer-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/producer/**
+          filters:
+            - RewritePath=/api/v1/producer/(?<segment>.*), /api/v1/producer/\${segment}
+            - JwtAuthenticationFilter
+            - RequestRateLimiter=redisRateLimiter
+
+        # Consumer Service routes
+        - id: consumer-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/consumer/**
+          filters:
+            - RewritePath=/api/v1/consumer/(?<segment>.*), /api/v1/consumer/\${segment}
+            - JwtAuthenticationFilter
+
+  # Redis configuration for rate limiting
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # Distributed Tracing
+  zipkin:
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      probability: 1.0
+
+# Eureka Client Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    hostname: localhost
+
+# JWT Configuration
+jwt:
+  secret: mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
+
+# Rate Limiting Configuration
+redis-rate-limiter:
+  replenishRate: 10  # requests per second
+  burstCapacity: 20  # burst capacity
+  requestedTokens: 1 # tokens per request
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.cloud.sleuth: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway
+  endpoint:
+    health:
+      show-details: when-authorized
+
+---
+# AWS Profile
+spring:
+  config:
+    activate:
+      on-profile: aws
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: producer-service
+          uri: lb://producer-service
+          predicates:
+            - Path=/api/v1/producer/**
+        - id: consumer-service
+          uri: lb://consumer-service
+          predicates:
+            - Path=/api/v1/consumer/**
+  data:
+    redis:
+      host: \${REDIS_HOST}
+      port: \${REDIS_PORT}
+      password: \${REDIS_PASSWORD}
+
+---
+# Azure Profile
+spring:
+  config:
+    activate:
+      on-profile: azure
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: producer-service
+          uri: lb://producer-service
+          predicates:
+            - Path=/api/v1/producer/**
+        - id: consumer-service
+          uri: lb://consumer-service
+          predicates:
+            - Path=/api/v1/consumer/**
+  data:
+    redis:
+      host: \${REDIS_HOST}
+      port: \${REDIS_PORT}
+      password: \${REDIS_PASSWORD}
+
+---
+# GCP Profile
+spring:
+  config:
+    activate:
+      on-profile: gcp
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/producer/**
+        - id: producer-service
+          uri: lb://producer-service
+          predicates:
+            - Path=/api/v1/producer/**
+        - id: consumer-service
+          uri: lb://consumer-service
+          predicates:
+            - Path=/api/v1/consumer/**
+  data:
+    redis:
+      host: \${REDIS_HOST}
+      port: \${REDIS_PORT}
+      password: \${REDIS_PASSWORD}
+EOF
+}
+
+create_gateway_application_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/Application.java" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+/**
+ * Main Spring Boot Application class for API Gateway Service.
+ *
+ * This service acts as the single entry point for all client requests,
+ * providing routing, security, rate limiting, and observability.
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_gateway_config() {
+  local service_dir="$1" package_path="$2"
+
+  # Gateway Security Configuration
+  cat > "$service_dir/src/main/java/$package_path/config/SecurityConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.SecurityWebFilterChain;
+
+/**
+ * Security configuration for API Gateway.
+ * Configures OAuth2 resource server and route authorization.
+ */
+@Configuration
+@EnableWebFluxSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    @Bean
+    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
+        http
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .authorizeExchange(exchanges -> exchanges
+                // Public endpoints
+                .pathMatchers("/actuator/**").permitAll()
+                .pathMatchers("/favicon.ico").permitAll()
+
+                // Auth endpoints (for login)
+                .pathMatchers("/api/v1/auth/login").permitAll()
+
+                // Protected endpoints
+                .pathMatchers("/api/v1/**").authenticated()
+
+                // All other requests
+                .anyExchange().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .jwtDecoder(jwtDecoder())
+                )
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public ReactiveJwtDecoder jwtDecoder() {
+        return NimbusReactiveJwtDecoder.withJwkSetUri("http://localhost:8080/oauth2/jwks")
+            .build();
+    }
+}
+EOF
+
+  # Gateway Route Configuration
+  cat > "$service_dir/src/main/java/$package_path/config/RouteConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Gateway route configuration.
+ * Defines routing rules for different services.
+ */
+@Configuration
+public class RouteConfig {
+
+    @Bean
+    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
+        return builder.routes()
+            // User Service - Authentication
+            .route("user-service-auth", r -> r
+                .path("/api/v1/auth/**")
+                .uri("http://localhost:8080")
+            )
+
+            // Producer Service - Message Production
+            .route("producer-service", r -> r
+                .path("/api/v1/producer/**")
+                .uri("http://localhost:8081")
+            )
+
+            // Consumer Service - Message Consumption
+            .route("consumer-service", r -> r
+                .path("/api/v1/consumer/**")
+                .uri("http://localhost:8082")
+            )
+
+            // Health check aggregation
+            .route("health-aggregate", r -> r
+                .path("/health")
+                .uri("http://localhost:8080/actuator/health")
+            )
+
+            .build();
+    }
+}
+EOF
+
+  # Rate Limiting Configuration
+  cat > "$service_dir/src/main/java/$package_path/config/RateLimitConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
+import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import reactor.core.publisher.Mono;
+
+/**
+ * Rate limiting configuration for API Gateway.
+ */
+@Configuration
+public class RateLimitConfig {
+
+    @Bean
+    public KeyResolver userKeyResolver() {
+        return exchange -> {
+            // Rate limit based on user ID from JWT token
+            String userId = exchange.getRequest().getHeaders()
+                .getFirst("X-User-Id");
+            return Mono.just(userId != null ? userId : "anonymous");
+        };
+    }
+
+    @Bean
+    public RedisRateLimiter redisRateLimiter() {
+        return new RedisRateLimiter(10, 20, 1); // replenishRate, burstCapacity, requestedTokens
+    }
+}
+EOF
+}
+
+create_gateway_filter() {
+  local service_dir="$1" package_path="$2"
+
+  # JWT Authentication Filter
+  cat > "$service_dir/src/main/java/$package_path/filter/JwtAuthenticationFilter.java" << EOF
+package ${package_path//"/"/"."}.filter;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.gateway.filter.GatewayFilter;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+import javax.crypto.SecretKey;
+import java.util.List;
+
+/**
+ * JWT Authentication Gateway Filter.
+ * Validates JWT tokens and extracts user information.
+ */
+@Component
+@Slf4j
+public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAuthenticationFilter.Config> {
+
+    @Value("\${jwt.secret:mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm}")
+    private String jwtSecret;
+
+    public JwtAuthenticationFilter() {
+        super(Config.class);
+    }
+
+    @Override
+    public GatewayFilter apply(Config config) {
+        return (exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+
+            if (!isAuthRequired(request)) {
+                return chain.filter(exchange);
+            }
+
+            if (!containsAuthorizationHeader(request)) {
+                return onError(exchange, "Authorization header is missing", HttpStatus.UNAUTHORIZED);
+            }
+
+            String token = extractToken(request);
+            if (token == null) {
+                return onError(exchange, "Invalid authorization header format", HttpStatus.UNAUTHORIZED);
+            }
+
+            try {
+                Claims claims = validateToken(token);
+
+                // Add user information to request headers
+                ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                    .header("X-User-Id", claims.getSubject())
+                    .header("X-User-Role", claims.get("role", String.class))
+                    .build();
+
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
+
+            } catch (Exception e) {
+                log.error("JWT validation failed", e);
+                return onError(exchange, "Invalid token", HttpStatus.UNAUTHORIZED);
+            }
+        };
+    }
+
+    private boolean isAuthRequired(ServerHttpRequest request) {
+        String path = request.getPath().value();
+        // Skip auth for login endpoint
+        return !path.contains("/auth/login");
+    }
+
+    private boolean containsAuthorizationHeader(ServerHttpRequest request) {
+        List<String> authHeaders = request.getHeaders().get(HttpHeaders.AUTHORIZATION);
+        return authHeaders != null && !authHeaders.isEmpty();
+    }
+
+    private String extractToken(ServerHttpRequest request) {
+        List<String> authHeaders = request.getHeaders().get(HttpHeaders.AUTHORIZATION);
+        if (authHeaders != null && !authHeaders.isEmpty()) {
+            String authHeader = authHeaders.get(0);
+            if (authHeader.startsWith("Bearer ")) {
+                return authHeader.substring(7);
+            }
+        }
+        return null;
+    }
+
+    private Claims validateToken(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        return Jwts.parserBuilder()
+            .setSigningKey(key)
+            .build()
+            .parseClaimsJws(token)
+            .getBody();
+    }
+
+    private Mono<Void> onError(ServerWebExchange exchange, String error, HttpStatus status) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(status);
+        response.getHeaders().add("Content-Type", "application/json");
+
+        String errorResponse = String.format("{\"error\": \"%s\", \"status\": %d}", error, status.value());
+
+        return response.writeWith(
+            Mono.just(response.bufferFactory().wrap(errorResponse.getBytes()))
+        );
+    }
+
+    public static class Config {
+        // Configuration properties can be added here
+    }
+}
+EOF
+
+  # Global Filter
+  cat > "$service_dir/src/main/java/$package_path/filter/GlobalFilter.java" << EOF
+package ${package_path//"/"/"."}.filter;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.time.Instant;
+
+/**
+ * Global Gateway Filter for logging and monitoring.
+ */
+@Configuration
+@Slf4j
+public class GlobalFilter {
+
+    @Bean
+    @Order(-1)
+    public GlobalFilter globalRequestFilter() {
+        return new GlobalFilter() {
+            @Override
+            public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+                Instant start = Instant.now();
+
+                return chain.filter(exchange)
+                    .then(Mono.fromRunnable(() -> {
+                        Instant end = Instant.now();
+                        Duration duration = Duration.between(start, end);
+
+                        log.info("Request: {} {} -> {} ({}ms)",
+                            exchange.getRequest().getMethod(),
+                            exchange.getRequest().getPath(),
+                            exchange.getResponse().getStatusCode(),
+                            duration.toMillis()
+                        );
+                    }));
+            }
+        };
+    }
+}
+EOF
+}
+
 create_eda_docker_compose() {
   local project_dir="$1"
 
@@ -4883,6 +5427,35 @@ services:
       - "9411:9411"
     environment:
       - STORAGE_TYPE=mem
+    networks:
+      - eda-network
+
+  # Redis for Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: eda-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    networks:
+      - eda-network
+
+  # API Gateway
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: ../Dockerfile
+    container_name: eda-gateway
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - JWT_SECRET=mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
+    depends_on:
+      - user-srv
+      - producer-srv
+      - consumer-srv
+      - redis
     networks:
       - eda-network
 

@@ -1050,10 +1050,13 @@ bash -n sbootgen.sh
 - **EDA-Kafka Microservices**: Four-service architecture (gateway, user-srv, producer-srv, consumer-srv)
 - **JWT Authentication**: Cross-service authentication with role-based access
 - **JSON Message Processing**: String keys, JSON values with Kafka
-- **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper/Zipkin
+- **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper/Zipkin/Redis
 - **Circuit Breaker**: Resilience4j Circuit Breaker for microservice HTTP communication (not Kafka)
 - **Distributed Tracing**: Zipkin integration for observability across all services
-- **API Gateway**: Spring Cloud Gateway with rate limiting and JWT validation
+- **API Gateway**: Spring Cloud Gateway with rate limiting, JWT validation, and OAuth2
+- **OAuth2/OpenID Connect**: Enterprise-grade authentication with authorization server
+- **Service Discovery**: Eureka integration for dynamic service registration
+- **Rate Limiting**: Redis-based request throttling and protection
 - **GitHub Actions CI/CD**: Complete pipeline with build, test, security scan, and deployment
 - **Cloud Deployment**: Ready-to-deploy configurations for AWS, Azure, and GCP
 
@@ -1256,10 +1259,11 @@ docker-compose up --build
 
 # Services will be available at:
 # API Gateway:                http://localhost:8083
-# User Service (JWT Auth):    http://localhost:8080
+# User Service (OAuth2/JWT):  http://localhost:8080
 # Producer Service:           http://localhost:8081
 # Consumer Service:           http://localhost:8082
 # Zipkin (Tracing UI):        http://localhost:9411
+# Redis (Rate Limiting):      localhost:6379
 # Kafka:                      localhost:9092
 ```
 
@@ -1313,26 +1317,35 @@ curl -X POST http://localhost:8081/api/v1/producer/test \
 
 ### **Service Endpoints**
 
-#### **User Service (Port 8080)**
+#### **API Gateway (Port 8083) - Single Entry Point**
 ```bash
-# Authentication endpoints
-POST /api/v1/auth/login      # Get JWT token
-POST /api/v1/auth/validate   # Validate token
+# Authentication endpoints (routed to user-service)
+POST /api/v1/auth/login      # OAuth2 login
+POST /api/v1/auth/validate   # JWT token validation
 GET  /api/v1/auth/me         # Get current user
-```
 
-#### **Producer Service (Port 8081)**
-```bash
-# Message production
-POST /api/v1/producer/send   # Send custom message
+# Producer endpoints (routed to producer-service)
+POST /api/v1/producer/send   # Send custom message (rate limited)
 POST /api/v1/producer/test   # Send test message
+
+# Consumer endpoints (routed to consumer-service)
+GET  /api/v1/consumer/status # Consumer status
+
+# Health and monitoring
+GET  /actuator/health        # Gateway health
+GET  /actuator/gateway       # Gateway routes
 ```
 
-#### **Consumer Service (Port 8082)**
-```bash
-# Message monitoring (no direct endpoints - listens to Kafka)
-# Check logs or add monitoring endpoints as needed
-```
+#### **Direct Service Access (For Development)**
+- **User Service**: `http://localhost:8080` (OAuth2 Authorization Server)
+- **Producer Service**: `http://localhost:8081` (Message Producer)
+- **Consumer Service**: `http://localhost:8082` (Message Consumer)
+
+#### **Observability Endpoints**
+- **Zipkin UI**: `http://localhost:9411` (Distributed Tracing)
+- **Health Checks**: `/actuator/health` on all services
+- **Metrics**: `/actuator/metrics` on all services
+- **Circuit Breakers**: `/actuator/health` (circuit breaker status)
 
 ### **Default Users**
 - **admin/admin123**: ADMIN role (all services)
@@ -1382,6 +1395,63 @@ public String fallback(Exception e) {
     return "Service temporarily unavailable";
 }
 ```
+
+## 🏗️ **Enterprise Architecture Features**
+
+### **4-Tier Enterprise Architecture**
+```
+Internet → API Gateway (Security, Routing, Rate Limiting)
+    ↓
+Service Mesh → Microservices (Authentication, Business Logic)
+    ↓
+Event Streaming → Kafka + Zookeeper (Async Communication)
+    ↓
+Infrastructure → PostgreSQL + Redis + Zipkin (Data + Caching + Observability)
+```
+
+### **🔗 Distributed Tracing with Zipkin**
+- **Spring Cloud Sleuth**: Automatic trace ID injection
+- **Zipkin UI**: Visual trace analysis at `http://localhost:9411`
+- **Cross-Service Tracing**: Follow requests across all services
+- **Performance Monitoring**: Identify bottlenecks and slow calls
+
+### **🚪 API Gateway (Spring Cloud Gateway)**
+- **Single Entry Point**: All client requests through gateway
+- **JWT Authentication**: Token validation at gateway level
+- **Rate Limiting**: Redis-based request throttling
+- **Load Balancing**: Service discovery integration
+- **Request/Response Filtering**: Custom filters for security
+
+### **🔐 OAuth2/OpenID Connect Security**
+- **Authorization Server**: User service as OAuth2 provider
+- **JWT Tokens**: Industry-standard token format
+- **OpenID Connect**: Identity layer on OAuth2
+- **Multi-Client Support**: Different apps with different scopes
+- **Token Introspection**: Real-time token validation
+
+### **🔍 Service Discovery & Registration**
+- **Eureka Server**: Dynamic service registration
+- **Load Balancing**: Client-side load distribution
+- **Service Health**: Automatic health checking
+- **Failover**: Automatic service switching
+
+### **⚡ Rate Limiting & Protection**
+- **Redis Backend**: Distributed rate limiting
+- **User-Based Limits**: Per-user request throttling
+- **Burst Capacity**: Allow traffic spikes
+- **Graduated Limits**: Different limits per endpoint
+
+### **📊 Observability & Monitoring**
+- **Centralized Logging**: Structured logging across services
+- **Metrics Collection**: Prometheus-compatible metrics
+- **Health Checks**: Comprehensive service health monitoring
+- **Dashboard Integration**: Grafana/Kibana ready
+
+### **🏭 Production Operations**
+- **Configuration Management**: Externalized config with profiles
+- **Graceful Shutdown**: Proper service termination
+- **Container Optimization**: Multi-stage Docker builds
+- **Security Hardening**: Non-root containers, minimal images
 
 ## 🚀 **CI/CD Pipeline**
 
