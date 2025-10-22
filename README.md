@@ -22,6 +22,24 @@ A professional, enterprise-grade Spring Boot project generator with comprehensiv
 - **Flyway** for database migrations
 - **Testcontainers** for integration testing
 
+### 🧪 **Comprehensive Testing Stack**
+- **JUnit 5** - Modern testing framework
+- **Mockito** - Mocking and stubbing
+- **Spring Boot Test** - Integration testing
+- **Testcontainers** - Database integration tests
+- **H2 Database** - In-memory testing database
+- **Java Faker** - Test data generation
+- **Maven Surefire/Failsafe** - Test execution plugins
+- **JaCoCo** - Code coverage reporting
+
+### 📦 **Core Dependencies**
+- **Spring Boot Validation** - Bean validation
+- **Spring Data JPA** - Data persistence
+- **Jackson Databind** - JSON processing
+- **Commons Lang 3** - Utility functions
+- **Configuration Processor** - Metadata generation
+- **H2/PostgreSQL** - Database support
+
 ### 🔧 **Code Quality & Security**
 - **Spotless** - Automated code formatting (Google Java Style)
 - **Checkstyle** - Code style enforcement
@@ -377,6 +395,47 @@ make coverage
 - **PostgreSQL** containers for database tests
 - **Automatic cleanup** after tests
 - **Reusable configurations**
+
+### Testing with H2 Database
+```java
+@SpringBootTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+class MyServiceTest {
+
+    @Autowired
+    private MyService myService;
+
+    @Test
+    void testBusinessLogic() {
+        // Test with H2 in-memory database
+        // Automatically configured for local profile
+    }
+}
+```
+
+### Test Data Generation with Java Faker
+```java
+@SpringBootTest
+class MyEntityTest {
+
+    @Autowired
+    private TestEntityManager entityManager;
+
+    private Faker faker = new Faker();
+
+    @Test
+    void testEntityCreation() {
+        MyEntity entity = MyEntity.builder()
+            .name(faker.name().fullName())
+            .email(faker.internet().emailAddress())
+            .phone(faker.phoneNumber().phoneNumber())
+            .build();
+
+        entityManager.persist(entity);
+        // Test entity persistence
+    }
+}
+```
 
 ## 🔧 Advanced Configuration
 
@@ -761,21 +820,22 @@ bash -n sbootgen.sh
 
 ## 📈 Changelog
 
-### Version 2.0.0 (Current)
-- **Complete Refactor**: Modular, SOLID-compliant design
-- **Safety Improvements**: Comprehensive validation and error handling
-- **Git Integration**: Automatic repository initialization
-- **Version Management**: Auto-update capability
-- **Enhanced Logging**: Multi-level colored logging system
-- **Project Validation**: Ensures generated projects are complete and correct
-- **Backup System**: Automatic backup of existing directories
-- **Resource Checks**: System resource validation
-
-### Version 1.0.0
+### Version 0.0.1 (Current)
 - Initial release with basic Spring Boot project generation
 - Support for three architectures
 - Docker and monitoring setup
 - Basic tooling integration
+- Modular, SOLID-compliant design
+- Comprehensive validation and error handling
+- Automatic repository initialization
+- Auto-update capability
+- Multi-level colored logging system
+- Ensures generated projects are complete and correct
+- Automatic backup of existing directories
+- System resource validation
+- JUnit 5, Mockito, Testcontainers, H2, Java Faker
+- Validation, JPA, Jackson, Commons Lang, Config Processor
+
 
 ## 🎯 Roadmap
 
@@ -870,42 +930,80 @@ The `eda-kafka` architecture creates Kafka-based event-driven applications with 
 - **Multi-Container**: PostgreSQL + Kafka + Zookeeper + App
 - **Health Checks**: Service readiness validation
 
-### **Configuration Profiles**
+### **Comprehensive Configuration Profiles**
 
 #### **Local Development**
 ```yaml
 kafka:
   bootstrap-servers: localhost:9092
+  producer:
+    acks: all
+    retries: 3
+    enable-idempotence: true
+  consumer:
+    auto-offset-reset: earliest
+    max-poll-records: 500
+  listener:
+    concurrency: 3
+    ack-mode: batch
+
 spring:
   kafka:
-    consumer:
-      group-id: app-name
     producer:
-      key-serializer: StringSerializer
-      value-serializer: JsonSerializer
+      transaction-id-prefix: ${spring.application.name}-
+    consumer:
+      group-id: ${spring.application.name}
+    streams:
+      application-id: ${spring.application.name}-streams
 ```
 
 #### **Docker Environment**
 ```yaml
 kafka:
   bootstrap-servers: kafka:9092
-# Same Spring Kafka config as local
+
+# Same comprehensive Spring Kafka config as local
+# with Docker-specific bootstrap servers
 ```
 
-#### **Production Environment**
+#### **Production Environment (Enterprise)**
 ```yaml
 kafka:
   bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
   producer:
     acks: all
     retries: 10
-    batch-size: 32768
+    compression-type: lz4
+    delivery-timeout-ms: 120000
   consumer:
     enable-auto-commit: false
+    isolation-level: read_committed
+    max-poll-records: 1000
+
 spring:
   kafka:
     security:
       protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+    properties:
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:PLAIN}
+      ssl.truststore.location: ${KAFKA_TRUSTSTORE_LOCATION}
+    streams:
+      properties:
+        replication.factor: 3
+        min.insync.replicas: 2
+        processing.guarantee: exactly_once_v2
+
+# Custom event processing config
+app:
+  kafka:
+    topics:
+      events: ${spring.application.name}-events
+      dead-letter: ${spring.application.name}-events.DLT
+    monitoring:
+      enabled: true
+    error-handling:
+      dead-letter-enabled: true
+      retry-enabled: true
 ```
 
 ### **Usage Example**
@@ -923,11 +1021,24 @@ make docker-up
 ```
 
 ### **Key Components**
-- **Event Producers**: Send events to Kafka topics
-- **Event Consumers**: Process events from Kafka topics
+
+#### **Event Processing**
+- **Event Producers**: Idempotent, transactional JSON event publishing
+- **Event Consumers**: Batch processing with configurable concurrency
 - **Event Handlers**: Business logic for event processing
-- **Health Monitoring**: Kafka connectivity and lag monitoring
-- **Error Handling**: Dead letter topics and retry mechanisms
+- **Event Streams**: Kafka Streams for real-time event processing
+
+#### **Reliability & Resilience**
+- **Dead Letter Topics**: Automatic error event routing
+- **Retry Mechanisms**: Configurable exponential backoff
+- **Circuit Breakers**: Fault tolerance for downstream services
+- **Health Monitoring**: Kafka connectivity and consumer lag monitoring
+
+#### **Enterprise Features**
+- **Security**: SASL/SSL authentication and encryption
+- **Monitoring**: Metrics and observability integration
+- **Performance**: Optimized batch sizes and compression
+- **Exactly-Once Processing**: Transactional guarantees
 
 ## 🧠 Smart & Safe Features
 

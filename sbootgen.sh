@@ -640,7 +640,7 @@ EOF
 
 # Architecture-specific configurations
 get_base_dependencies() {
-  echo "web,data-jpa,validation,lombok,actuator,devtools,postgresql,h2"
+  echo "web,data-jpa,validation,lombok,actuator,devtools,postgresql,h2,configuration-processor,jackson-databind,commons-lang3"
 }
 
 get_extra_dependencies() {
@@ -709,12 +709,40 @@ add_enterprise_dependencies() {
   }
 
   # Add logstash encoder
-  sed '/<dependencies>/a\
+    sed '/<dependencies>/a\
     <!-- Structured JSON logging -->\
     <dependency>\
       <groupId>net.logstash.logback</groupId>\
       <artifactId>logstash-logback-encoder</artifactId>\
       <version>'"$LOGSTASH_ENCODER_VERSION"'</version>\
+    </dependency>\
+    <!-- Testing Dependencies -->\
+    <dependency>\
+      <groupId>org.springframework.boot</groupId>\
+      <artifactId>spring-boot-starter-test</artifactId>\
+      <scope>test</scope>\
+    </dependency>\
+    <dependency>\
+      <groupId>org.junit.jupiter</groupId>\
+      <artifactId>junit-jupiter</artifactId>\
+      <scope>test</scope>\
+    </dependency>\
+    <dependency>\
+      <groupId>org.mockito</groupId>\
+      <artifactId>mockito-core</artifactId>\
+      <scope>test</scope>\
+    </dependency>\
+    <dependency>\
+      <groupId>org.mockito</groupId>\
+      <artifactId>mockito-junit-jupiter</artifactId>\
+      <scope>test</scope>\
+    </dependency>\
+    <!-- Test Data Generation -->\
+    <dependency>\
+      <groupId>com.github.javafaker</groupId>\
+      <artifactId>javafaker</artifactId>\
+      <version>1.0.2</version>\
+      <scope>test</scope>\
     </dependency>' "$pom_file" > "$temp_file" || {
       rm -f "$temp_file"
       log_error "Failed to add logstash dependency"
@@ -883,6 +911,26 @@ add_code_quality_plugins() {
             </goals>\
           </execution>\
         </executions>\
+      </plugin>\
+      <!-- Maven Surefire Plugin for JUnit 5 -->\
+      <plugin>\
+        <groupId>org.apache.maven.plugins</groupId>\
+        <artifactId>maven-surefire-plugin</artifactId>\
+        <version>3.2.5</version>\
+      </plugin>\
+      <!-- Maven Failsafe Plugin for Integration Tests -->\
+      <plugin>\
+        <groupId>org.apache.maven.plugins</groupId>\
+        <artifactId>maven-failsafe-plugin</artifactId>\
+        <version>3.2.5</version>\
+        <executions>\
+          <execution>\
+            <goals>\
+              <goal>integration-test</goal>\
+              <goal>verify</goal>\
+            </goals>\
+          </execution>\
+        </executions>\
       </plugin>' "$pom_file" > "$temp_file" || {
     rm -f "$temp_file"
     log_error "Failed to add code quality plugins"
@@ -975,11 +1023,11 @@ logging:
     console: \"%d{yyyy-MM-dd HH:mm:ss} - %msg%n\"
     file: \"%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n\""
 
-  # Add Kafka configuration for EDA-Kafka architecture
+  # Add comprehensive Kafka configuration for EDA-Kafka architecture
   if [[ "$arch" == "eda-kafka" ]]; then
     base_config="$base_config
 
-# Kafka Configuration for Event-Driven Architecture
+# Comprehensive Kafka Configuration for Event-Driven Architecture
 kafka:
   bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   producer:
@@ -990,6 +1038,9 @@ kafka:
     batch-size: 16384
     linger-ms: 5
     buffer-memory: 33554432
+    max-in-flight-requests-per-connection: 1
+    enable-idempotence: true
+    transaction-id-prefix: \${spring.application.name}-
   consumer:
     group-id: \${KAFKA_CONSUMER_GROUP:\${spring.application.name}}
     key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -998,12 +1049,29 @@ kafka:
     enable-auto-commit: true
     auto-commit-interval: 1000
     session-timeout-ms: 30000
+    heartbeat-interval-ms: 3000
+    max-poll-records: 500
+    fetch-min-bytes: 1
+    fetch-max-wait-ms: 500
   listener:
     concurrency: 3
     ack-mode: batch
+    poll-timeout: 3000
+    type: batch
   admin:
     properties:
       bootstrap.servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      connections.max.idle.ms: 10000
+      request.timeout.ms: 5000
+  template:
+    default-topic: \${spring.application.name}-events
+  streams:
+    application-id: \${spring.application.name}-streams
+    bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    default-key-serde: org.apache.kafka.common.serialization.Serdes\$StringSerde
+    default-value-serde: org.springframework.kafka.support.serializer.JsonSerde
+    auto-offset-reset: earliest
+    processing-guarantee: exactly_once_v2
 
 spring:
   kafka:
@@ -1013,18 +1081,62 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         spring.json.trusted.packages: \"*\"
+        spring.json.type.mapping: \"event:com.example.events.BaseEvent\"
+      transaction-id-prefix: \${spring.application.name}-
     consumer:
       group-id: \${KAFKA_CONSUMER_GROUP:\${spring.application.name}}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: \"*\"
+        spring.json.type.mapping: \"event:com.example.events.BaseEvent\"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: \"com.example.events.BaseEvent\"
     admin:
       properties:
         bootstrap.servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     listener:
       concurrency: 3
-      ack-mode: batch"
+      ack-mode: batch
+      type: batch
+    streams:
+      application-id: \${spring.application.name}-streams
+      client-id: \${spring.application.name}-client
+      properties:
+        default.key.serde: org.apache.kafka.common.serialization.Serdes\$StringSerde
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+        spring.json.trusted.packages: \"*\"
+        processing.guarantee: exactly_once_v2
+        commit.interval.ms: 1000
+    template:
+      default-topic: \${spring.application.name}-events
+    retry:
+      topic:
+        attempts: 3
+        delay: 1000
+        multiplier: 2.0
+        max-delay: 30000
+      dlt:
+        suffix: \".DLT\"
+        method: \"sendToDlq\"
+    security:
+      protocol: \${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+
+# Event Processing Configuration
+app:
+  kafka:
+    topics:
+      events: \${spring.application.name}-events
+      dead-letter: \${spring.application.name}-events.DLT
+      retry: \${spring.application.name}-events.RETRY
+    consumer:
+      max-retries: 3
+      backoff-multiplier: 2.0
+      initial-interval: 1000ms
+      max-interval: 30000ms
+    producer:
+      idempotent: true
+      transactional: true"
   fi
 
   # Profile-specific configurations
@@ -1103,7 +1215,7 @@ spring:
       ddl-auto: validate
     show-sql: false"
 
-  # Add production Kafka config for EDA-Kafka
+  # Add enterprise production Kafka config for EDA-Kafka
   if [[ "$arch" == "eda-kafka" ]]; then
     base_config="$base_config
   kafka:
@@ -1114,9 +1226,22 @@ spring:
       batch-size: 32768
       linger-ms: 10
       buffer-memory: 67108864
+      compression-type: lz4
+      max-block-ms: 60000
+      delivery-timeout-ms: 120000
+      request-timeout-ms: 30000
     consumer:
       enable-auto-commit: false
       session-timeout-ms: 60000
+      heartbeat-interval-ms: 10000
+      max-poll-interval-ms: 300000
+      isolation-level: read_committed
+    admin:
+      properties:
+        connections.max.idle.ms: 300000
+        request.timeout.ms: 60000
+        retries: 5
+        retry.backoff.ms: 1000
   spring:
     kafka:
       security:
@@ -1125,7 +1250,55 @@ spring:
         sasl.mechanism: \${KAFKA_SASL_MECHANISM:PLAIN}
         sasl.jaas.config: \${KAFKA_SASL_JAAS_CONFIG}
         ssl.truststore.location: \${KAFKA_TRUSTSTORE_LOCATION}
-        ssl.truststore.password: \${KAFKA_TRUSTSTORE_PASSWORD}"
+        ssl.truststore.password: \${KAFKA_TRUSTSTORE_PASSWORD}
+        ssl.keystore.location: \${KAFKA_KEYSTORE_LOCATION}
+        ssl.keystore.password: \${KAFKA_KEYSTORE_PASSWORD}
+        ssl.key.password: \${KAFKA_KEY_PASSWORD}
+        security.protocol: \${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+      listener:
+        concurrency: 5
+        ack-mode: manual_immediate
+      producer:
+        properties:
+          max.in.flight.requests.per.connection: 5
+          enable.idempotence: true
+          transactional.id: \${spring.application.name}-producer
+      consumer:
+        properties:
+          enable.auto.commit: false
+          isolation.level: read_committed
+          max.poll.records: 1000
+          fetch.min.bytes: 1024
+          fetch.max.wait.ms: 1000
+    streams:
+      properties:
+        num.standby.replicas: 1
+        replication.factor: 3
+        min.insync.replicas: 2
+        compression.type: lz4
+        processing.guarantee: exactly_once_v2
+        commit.interval.ms: 5000
+        poll.ms: 100
+        max.poll.records: 1000
+
+# Enterprise Event Processing Configuration for Production
+app:
+  kafka:
+    monitoring:
+      enabled: true
+      metrics-interval: 30000
+    error-handling:
+      dead-letter-enabled: true
+      retry-enabled: true
+      circuit-breaker-enabled: true
+    security:
+      ssl-enabled: \${KAFKA_SSL_ENABLED:true}
+      sasl-enabled: \${KAFKA_SASL_ENABLED:true}
+    performance:
+      producer-batch-size: 32768
+      consumer-max-poll-records: 1000
+      streams-cache-size: 10485760
+      streams-cache-max-bytes-buffering: 10485760"
   fi
 
   safe_write_file "$application_yml" "$base_config" || return 1
