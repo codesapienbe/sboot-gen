@@ -6877,11 +6877,21 @@ main() {
     return 0
   fi
 
-  # Check if script is running from temp directory (downloaded via curl)
+  # Check if script is running from temp directory (downloaded via curl) or piped
   local script_path="${BASH_SOURCE[0]}"
-  if [[ "$script_path" =~ ^/tmp/ ]]; then
-    log_debug "Script running from temp directory: $script_path"
+  local is_temp_execution=false
 
+  # Check if running from /tmp file
+  if [[ "$script_path" =~ ^/tmp/ ]]; then
+    is_temp_execution=true
+    log_debug "Script running from temp directory: $script_path"
+  # Check if running from stdin (piped)
+  elif [[ -z "$script_path" ]] || [[ "$script_path" =~ ^/dev/fd/ ]]; then
+    is_temp_execution=true
+    log_debug "Script running from pipe/stdin"
+  fi
+
+  if [[ "$is_temp_execution" == "true" ]]; then
     # For temp execution, just run the command directly without installation
     if [[ $# -gt 0 ]]; then
       log_debug "Running sboot command directly from temp location"
