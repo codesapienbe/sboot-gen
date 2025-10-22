@@ -102,6 +102,9 @@ sboot microservice user-service
 
 # Create a traditional monolith
 sboot monolith legacy-app
+
+# Create an event-driven app
+sboot eda-kafka event-processor
 ```
 
 ### Script Management
@@ -179,6 +182,7 @@ sboot
 sboot modulith ecommerce-platform
 sboot microservice payment-service
 sboot monolith admin-portal
+sboot eda-kafka event-processor
 ```
 
 ### Interactive Mode
@@ -206,6 +210,7 @@ The interactive mode provides:
 | `modulith` | Domain-driven modular monolith | Complex business domains with bounded contexts |
 | `microservice` | Standalone microservice | Independent deployable services |
 | `monolith` | Traditional layered monolith | Simple applications, legacy modernization |
+| `eda-kafka` | Event-driven architecture | Kafka-based event processing and streaming |
 
 ### Project Structure
 ```
@@ -777,7 +782,7 @@ bash -n sbootgen.sh
 - **Plugin System**: Extensible architecture for custom generators
 - **Template Engine**: Custom project templates
 - **Cloud Integration**: AWS, GCP, Azure deployment templates
-- **Database Options**: Multiple database support (MySQL, PostgreSQL, MongoDB)
+- **Database Options**: Multiple database support (MySQL, PostgreSQL, MongoDB, H2)
 - **Frontend Integration**: React/Vue/Angular project generation
 - **Kubernetes**: K8s deployment manifests
 - **Monitoring Dashboards**: Grafana dashboards included
@@ -814,6 +819,115 @@ make run
 
 ### **Available Everywhere**
 Once installed, `sboot` is available in all your terminal sessions - no need to reinstall or source anything!
+
+## 📦 Project Backups
+
+Every successfully generated project automatically creates a timestamped ZIP backup:
+
+### **Backup Features**
+- **Automatic Creation**: Generated after successful project creation
+- **Timestamped Archives**: `project_architecture_backup_YYYYMMDD_HHMMSS.zip`
+- **Complete State**: Contains the entire initial generated project
+- **Safe Storage**: Placed in the project directory for easy access
+
+### **Backup Contents**
+- All source code and configuration files
+- Docker and Docker Compose configurations
+- Documentation and build scripts
+- Initial Git repository state
+- Database migrations and schemas
+
+### **Usage**
+```bash
+# After project creation
+ls -la my-app/
+# my-app_modulith_backup_20241022_143052.zip
+
+# Extract backup if needed
+unzip my-app_modulith_backup_20241022_143052.zip -d backup/
+```
+
+### **Why Backups Matter**
+- **Recovery**: Restore to initial clean state anytime
+- **Comparison**: Compare changes against original generation
+- **Distribution**: Share pristine project state with teams
+- **Audit**: Maintain records of generated configurations
+
+## 🎯 Event-Driven Architecture (EDA-Kafka)
+
+The `eda-kafka` architecture creates Kafka-based event-driven applications with comprehensive event streaming capabilities:
+
+### **Kafka Integration**
+- **Spring Kafka**: Full Kafka integration with Spring Boot
+- **Event Producers**: JSON serialization with configurable producers
+- **Event Consumers**: Batch processing with configurable consumers
+- **Topic Management**: Auto-creation and management
+- **Health Checks**: Kafka connectivity monitoring
+
+### **Docker Environment**
+- **Kafka Broker**: Confluent Platform Kafka 7.4.0
+- **Zookeeper**: Cluster coordination service
+- **Multi-Container**: PostgreSQL + Kafka + Zookeeper + App
+- **Health Checks**: Service readiness validation
+
+### **Configuration Profiles**
+
+#### **Local Development**
+```yaml
+kafka:
+  bootstrap-servers: localhost:9092
+spring:
+  kafka:
+    consumer:
+      group-id: app-name
+    producer:
+      key-serializer: StringSerializer
+      value-serializer: JsonSerializer
+```
+
+#### **Docker Environment**
+```yaml
+kafka:
+  bootstrap-servers: kafka:9092
+# Same Spring Kafka config as local
+```
+
+#### **Production Environment**
+```yaml
+kafka:
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  producer:
+    acks: all
+    retries: 10
+    batch-size: 32768
+  consumer:
+    enable-auto-commit: false
+spring:
+  kafka:
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+```
+
+### **Usage Example**
+```bash
+# Create event-driven app
+sboot eda-kafka event-processor
+
+# Start with Docker (includes Kafka)
+cd event-processor
+make docker-up
+
+# App will be available at localhost:8080
+# Kafka broker at localhost:9092
+# Kafka UI at localhost:9094
+```
+
+### **Key Components**
+- **Event Producers**: Send events to Kafka topics
+- **Event Consumers**: Process events from Kafka topics
+- **Event Handlers**: Business logic for event processing
+- **Health Monitoring**: Kafka connectivity and lag monitoring
+- **Error Handling**: Dead letter topics and retry mechanisms
 
 ## 🧠 Smart & Safe Features
 
@@ -856,6 +970,8 @@ Once installed, `sboot` is available in all your terminal sessions - no need to 
 - 🏢 **Atomic Operations**: File operations are atomic to prevent corruption
 - 🏢 **Resource Cleanup**: Automatic cleanup of temporary files and locks
 - 🏢 **Cross-Platform Support**: Works across different Linux distributions and macOS
+- 🏢 **Project Backups**: Automatic ZIP archives of generated projects
+- 🏢 **Version Control**: Integrated Git repository initialization
 
 ---
 

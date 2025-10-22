@@ -13,7 +13,7 @@ set -euo pipefail
 ################################################################################
 
 # Configuration Constants
-readonly SCRIPT_VERSION="2.0.0"
+readonly SCRIPT_VERSION="0.0.1"
 readonly SCRIPT_REPO="codesapienbe/sboot-gen"
 readonly SCRIPT_URL="https://raw.githubusercontent.com/${SCRIPT_REPO}/main/sbootgen.sh"
 readonly SPRING_BOOT_VERSION="3.2.0"
@@ -31,6 +31,7 @@ readonly RECOMMENDED_COMMANDS=("git" "docker")
 # Dependency versions
 readonly LOGSTASH_ENCODER_VERSION="8.0"
 readonly PROBLEM_SPRING_WEB_VERSION="0.29.1"
+readonly SPRING_KAFKA_VERSION="3.2.0"
 readonly SPOTLESS_VERSION="2.44.5"
 readonly GOOGLE_JAVA_FORMAT_VERSION="1.19.2"
 readonly CHECKSTYLE_VERSION="3.3.1"
@@ -40,7 +41,7 @@ readonly SPOTBUGS_VERSION="4.8.3.0"
 readonly JACOCO_VERSION="0.8.11"
 
 # Supported architectures
-readonly SUPPORTED_ARCHITECTURES=("modulith" "microservice" "monolith")
+readonly SUPPORTED_ARCHITECTURES=("modulith" "microservice" "monolith" "eda-kafka")
 
 # Color constants
 readonly RED="\033[0;31m" GRN="\033[0;32m" YLW="\033[1;33m"
@@ -75,7 +76,7 @@ check_shell_compatibility() {
     local bash_major="${BASH_VERSION%%.*}"
     if (( bash_major < 4 )); then
       log_error "Bash version $BASH_VERSION detected. Requires Bash 4.0+ for full functionality."
-      return 1
+    return 1
     fi
   fi
 
@@ -619,6 +620,8 @@ ${GRN}║${CLR}  🐳 Docker: ${YLW}Multi-stage build ready${CLR}               
 ${GRN}║${CLR}  📊 Monitoring: ${YLW}Prometheus + Grafana ready${CLR}         ${GRN}║${CLR}
 ${GRN}║${CLR}  🔧 Quality: ${YLW}Spotless, Checkstyle, OWASP${CLR}          ${GRN}║${CLR}
 ${GRN}╠════════════════════════════════════════════════════════╣${CLR}
+${GRN}║${CLR}  📦 Backup: ${MAG}*.zip${MAG} created in project directory      ${GRN}║${CLR}
+${GRN}╠════════════════════════════════════════════════════════╣${CLR}
 ${GRN}║${CLR}  ${BLU}Next Steps:${CLR}                                       ${GRN}║${CLR}
 ${GRN}║${CLR}    ${CYN}cd $dir${CLR}                                     ${GRN}║${CLR}
 ${GRN}║${CLR}    ${CYN}make help${CLR}        # See all commands            ${GRN}║${CLR}
@@ -646,6 +649,7 @@ get_extra_dependencies() {
     modulith) echo "security,cache,flyway,prometheus,testcontainers" ;;
     microservice) echo "security,cache,flyway,prometheus,cloud-config,testcontainers" ;;
     monolith) echo "security,cache,flyway,prometheus,testcontainers" ;;
+    eda-kafka) echo "kafka,actuator,security,cache,testcontainers" ;;
     *) log_error "Unknown architecture: $arch"; return 1 ;;
   esac
 }
@@ -656,6 +660,7 @@ get_artifact_id() {
     modulith) echo "modulith-project" ;;
     microservice) echo "microservice-project" ;;
     monolith) echo "monolith-project" ;;
+    eda-kafka) echo "eda-kafka-project" ;;
     *) log_error "Unknown architecture: $arch"; return 1 ;;
   esac
 }
@@ -890,7 +895,7 @@ add_code_quality_plugins() {
 }
 
 create_application_config() {
-  local project_dir="$1"
+  local project_dir="$1" arch="$2"
 
   log_info "Creating application configuration..."
 
@@ -898,7 +903,9 @@ create_application_config() {
   safe_create_dir "$config_dir" || return 1
 
   local application_yml="$config_dir/application.yml"
-  safe_write_file "$application_yml" "spring:
+
+  # Base configuration for all architectures
+  local base_config="spring:
   application:
     name: \${project.artifactId}
   profiles:
@@ -966,7 +973,62 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
   pattern:
     console: \"%d{yyyy-MM-dd HH:mm:ss} - %msg%n\"
-    file: \"%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n\"
+    file: \"%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n\""
+
+  # Add Kafka configuration for EDA-Kafka architecture
+  if [[ "$arch" == "eda-kafka" ]]; then
+    base_config="$base_config
+
+# Kafka Configuration for Event-Driven Architecture
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  producer:
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    acks: all
+    retries: 3
+    batch-size: 16384
+    linger-ms: 5
+    buffer-memory: 33554432
+  consumer:
+    group-id: \${KAFKA_CONSUMER_GROUP:\${spring.application.name}}
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    auto-offset-reset: earliest
+    enable-auto-commit: true
+    auto-commit-interval: 1000
+    session-timeout-ms: 30000
+  listener:
+    concurrency: 3
+    ack-mode: batch
+  admin:
+    properties:
+      bootstrap.servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+spring:
+  kafka:
+    bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.trusted.packages: \"*\"
+    consumer:
+      group-id: \${KAFKA_CONSUMER_GROUP:\${spring.application.name}}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: \"*\"
+    admin:
+      properties:
+        bootstrap.servers: \${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      concurrency: 3
+      ack-mode: batch"
+  fi
+
+  # Profile-specific configurations
+  base_config="$base_config
 
 ---
 spring:
@@ -985,7 +1047,16 @@ spring:
   h2:
     console:
       enabled: true
-      path: /h2-console
+      path: /h2-console"
+
+  # Add local Kafka config for EDA-Kafka
+  if [[ "$arch" == "eda-kafka" ]]; then
+    base_config="$base_config
+  kafka:
+    bootstrap-servers: localhost:9092"
+  fi
+
+  base_config="$base_config
 
 ---
 spring:
@@ -1001,7 +1072,16 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate
-    show-sql: false
+    show-sql: false"
+
+  # Add Docker Kafka config for EDA-Kafka
+  if [[ "$arch" == "eda-kafka" ]]; then
+    base_config="$base_config
+  kafka:
+    bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"
+  fi
+
+  base_config="$base_config
 
 ---
 spring:
@@ -1021,13 +1101,40 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: false" || return 1
+    show-sql: false"
+
+  # Add production Kafka config for EDA-Kafka
+  if [[ "$arch" == "eda-kafka" ]]; then
+    base_config="$base_config
+  kafka:
+    bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      acks: all
+      retries: 10
+      batch-size: 32768
+      linger-ms: 10
+      buffer-memory: 67108864
+    consumer:
+      enable-auto-commit: false
+      session-timeout-ms: 60000
+  spring:
+    kafka:
+      security:
+        protocol: \${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+      properties:
+        sasl.mechanism: \${KAFKA_SASL_MECHANISM:PLAIN}
+        sasl.jaas.config: \${KAFKA_SASL_JAAS_CONFIG}
+        ssl.truststore.location: \${KAFKA_TRUSTSTORE_LOCATION}
+        ssl.truststore.password: \${KAFKA_TRUSTSTORE_PASSWORD}"
+  fi
+
+  safe_write_file "$application_yml" "$base_config" || return 1
 
   log_success "Application configuration created successfully"
 }
 
 create_docker_assets() {
-  local project_dir="$1" project_name="$2"
+  local project_dir="$1" project_name="$2" arch="$3"
 
   log_info "Creating Docker assets..."
 
@@ -1058,7 +1165,9 @@ ENTRYPOINT [\"/sbin/tini\", \"--\"]
 CMD [\"sh\", \"-c\", \"java \$JAVA_OPTS -jar app.jar\"]" || return 1
 
   local docker_compose="$project_dir/docker-compose.yml"
-  safe_write_file "$docker_compose" "version: '3.9'
+
+  # Base docker-compose configuration
+  local compose_config="version: '3.9'
 
 services:
   postgres:
@@ -1078,7 +1187,52 @@ services:
       timeout: 5s
       retries: 5
     networks:
+      - app-network"
+
+  # Add Kafka services for EDA-Kafka architecture
+  if [[ "$arch" == "eda-kafka" ]]; then
+    compose_config="$compose_config
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: ${project_name}-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - \"2181:2181\"
+    networks:
       - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: ${project_name}-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - \"9092:9092\"
+      - \"9094:9094\"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    healthcheck:
+      test: [\"CMD-SHELL\", \"kafka-broker-api-versions --bootstrap-server localhost:9092\"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network"
+  fi
+
+  # Add the app service
+  compose_config="$compose_config
 
   app:
     build:
@@ -1090,23 +1244,59 @@ services:
       DB_HOST: postgres
       DB_NAME: appdb
       DB_USER: appuser
-      DB_PASS: apppass
+      DB_PASS: apppass"
+
+  # Add Kafka environment variables for EDA-Kafka
+  if [[ "$arch" == "eda-kafka" ]]; then
+    compose_config="$compose_config
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: ${project_name}-group"
+  fi
+
+  compose_config="$compose_config
     ports:
       - \"8080:8080\"
-    depends_on:
-      postgres:
+    depends_on:"
+
+  # Add dependencies based on architecture
+  if [[ "$arch" == "eda-kafka" ]]; then
+    compose_config="$compose_config
+      kafka:
         condition: service_healthy
+      postgres:
+        condition: service_healthy"
+  else
+    compose_config="$compose_config
+      postgres:
+        condition: service_healthy"
+  fi
+
+  compose_config="$compose_config
     networks:
       - app-network
-    restart: unless-stopped
+    restart: unless-stopped"
+
+  # Add volumes and networks
+  compose_config="$compose_config
 
 volumes:
   postgres_data:
-    driver: local
+    driver: local"
+
+  # Add Kafka volumes for EDA-Kafka
+  if [[ "$arch" == "eda-kafka" ]]; then
+    compose_config="$compose_config
+  kafka_data:
+    driver: local"
+  fi
+
+  compose_config="$compose_config
 
 networks:
   app-network:
-    driver: bridge" || return 1
+    driver: bridge"
+
+  safe_write_file "$docker_compose" "$compose_config" || return 1
 
   local dockerignore="$project_dir/.dockerignore"
   safe_write_file "$dockerignore" "target/
@@ -1161,7 +1351,7 @@ test:
 	mvn test || (echo \"❌ Tests failed!\" && exit 1)
 	@echo \"✅ Tests passed!\"
 
-verify:
+verify: 
 	@echo \"🔍 Verifying code quality..\"
 	mvn spotless:check checkstyle:check -q || (echo \"❌ Verification failed!\" && exit 1)
 	@echo \"✅ Verification complete!\"
@@ -1419,6 +1609,41 @@ initialize_git_repository() {
 
   cd .. || log_warn "Failed to return to parent directory"
   log_success "Git repository initialized with initial commit"
+}
+
+create_project_backup() {
+  local project_dir="$1" arch="$2"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local backup_name="${project_dir}_${arch}_backup_${timestamp}.zip"
+  local temp_backup="/tmp/${backup_name}"
+
+  log_info "Creating project backup archive..."
+
+  # Check if zip is available
+  if ! command -v zip >/dev/null 2>&1; then
+    log_warn "zip command not available - skipping backup creation"
+    log_info "Install zip to enable automatic project backups"
+    return 0
+  fi
+
+  # Create backup in temp directory first
+  if cd "$project_dir" && zip -r "$temp_backup" . >/dev/null 2>&1; then
+    # Move to project directory
+    if mv "$temp_backup" "${project_dir}/${backup_name}"; then
+      log_success "Project backup created: ${backup_name}"
+      log_info "Backup location: ${project_dir}/${backup_name}"
+      log_info "Backup contains the initial generated project state"
+    else
+      log_warn "Failed to move backup to project directory"
+      rm -f "$temp_backup"
+    fi
+  else
+    log_warn "Failed to create project backup archive"
+  fi
+
+  # Return to original directory
+  cd - >/dev/null 2>&1 || true
 }
 
 check_for_updates() {
@@ -1764,8 +1989,8 @@ sboot() {
   add_code_quality_plugins "pom.xml" || return 1
 
   # Create project assets
-  create_application_config "$PROJECT_DIR" || return 1
-  create_docker_assets "$PROJECT_DIR" "$DIR" || return 1
+  create_application_config "$PROJECT_DIR" "$ARCH" || return 1
+  create_docker_assets "$PROJECT_DIR" "$DIR" "$ARCH" || return 1
   create_makefile "$PROJECT_DIR" || return 1
   create_database_migration "$PROJECT_DIR" || return 1
   create_documentation "$PROJECT_DIR" "$ARCH" || return 1
@@ -1776,6 +2001,9 @@ sboot() {
     log_error "Generated project validation failed"
     return 1
   }
+
+  # Create project backup
+  create_project_backup "$PROJECT_DIR" "$ARCH"
 
   # Return to original directory
   cd .. || log_warn "Failed to return to parent directory"
