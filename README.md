@@ -12,6 +12,14 @@ A professional, enterprise-grade Spring Boot project generator with comprehensiv
 - **Modulith**: Domain-driven modular monolith with Spring Modulith
 - **Microservice**: Standalone microservice with cloud config
 - **Monolith**: Traditional layered monolithic application
+- **EDA-Kafka**: Event-driven architecture with Kafka integration
+
+### 🤖 **AI Assistant Integration**
+- **Cursor**: Default AI assistant rules and conventions
+- **Copilot**: GitHub Copilot specific guidelines
+- **Gemini**: Google Gemini specific guidelines
+- **Claude**: Anthropic Claude specific guidelines
+- **Custom**: Environment variable configurable
 
 ### 🛠️ **Enterprise Tooling**
 - **Spring Boot 3.2.0** with Java 17
@@ -39,6 +47,45 @@ A professional, enterprise-grade Spring Boot project generator with comprehensiv
 - **Commons Lang 3** - Utility functions
 - **Configuration Processor** - Metadata generation
 - **H2/PostgreSQL** - Database support
+
+### 🏛️ **Generated Project Structure**
+```
+your-app/
+├── src/main/java/com/example/yourapp/
+│   ├── Application.java              # Main Spring Boot class
+│   ├── config/
+│   │   └── SecurityConfig.java       # Security configuration
+│   ├── controller/
+│   │   └── UserController.java       # REST controllers
+│   ├── service/
+│   │   └── UserService.java          # Business logic
+│   ├── repository/
+│   │   └── UserRepository.java       # Data access layer
+│   ├── model/
+│   │   └── User.java                 # JPA entities
+│   ├── dto/
+│   │   ├── UserResponse.java         # Response DTOs
+│   │   ├── CreateUserRequest.java    # Request DTOs
+│   │   └── UpdateUserRequest.java
+│   ├── exception/
+│   │   ├── GlobalExceptionHandler.java # Exception handling
+│   │   ├── ResourceNotFoundException.java
+│   │   └── ErrorResponse.java
+│   └── util/                         # Utility classes
+├── src/main/resources/
+│   ├── application.yml               # Main configuration
+│   ├── application-local.yml         # Local profile
+│   ├── application-docker.yml        # Docker profile
+│   ├── application-prod.yml          # Production profile
+│   └── logback-spring.xml            # Logging configuration
+├── src/test/java/                    # Test structure mirrors main
+├── docs/
+│   └── ai-coding-rules.md            # AI assistant guidelines
+├── Dockerfile                        # Multi-stage Docker build
+├── docker-compose.yml                # Local development stack
+├── Makefile                          # Build and run commands
+└── pom.xml                           # Maven configuration
+```
 
 ### 🔧 **Code Quality & Security**
 - **Spotless** - Automated code formatting (Google Java Style)
@@ -835,6 +882,11 @@ bash -n sbootgen.sh
 - System resource validation
 - JUnit 5, Mockito, Testcontainers, H2, Java Faker
 - Validation, JPA, Jackson, Commons Lang, Config Processor
+- AI Assistant Integration (Cursor, Copilot, Gemini, Claude)
+- Complete Enterprise Project Structure with proper packages
+- Production-ready classes: Security, Exception Handling, DTOs
+- Structured Logging Configuration with Logback
+- Comprehensive API Documentation with OpenAPI
 
 
 ## 🎯 Roadmap
@@ -879,6 +931,19 @@ make run
 
 ### **Available Everywhere**
 Once installed, `sboot` is available in all your terminal sessions - no need to reinstall or source anything!
+
+### **AI Assistant Configuration**
+Configure which AI assistant rules to include:
+
+```bash
+# Set environment variable (defaults to 'cursor')
+export AI_ASSISTANT=copilot  # cursor, copilot, gemini, claude
+
+# Generate project with specific AI assistant rules
+sboot modulith my-app
+
+# The docs/ai-coding-rules.md will contain guidelines for your configured assistant
+```
 
 ## 📦 Project Backups
 

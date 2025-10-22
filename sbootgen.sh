@@ -40,6 +40,9 @@ readonly OWASP_DEP_CHECK_VERSION="9.0.7"
 readonly SPOTBUGS_VERSION="4.8.3.0"
 readonly JACOCO_VERSION="0.8.11"
 
+# AI Assistant configuration
+AI_ASSISTANT="${AI_ASSISTANT:-cursor}"
+
 # Supported architectures
 readonly SUPPORTED_ARCHITECTURES=("modulith" "microservice" "monolith" "eda-kafka")
 
@@ -1784,6 +1787,1067 @@ initialize_git_repository() {
   log_success "Git repository initialized with initial commit"
 }
 
+create_package_structure() {
+  local project_dir="$1" package_path="$2"
+  local src_main_java="$project_dir/src/main/java"
+  local src_test_java="$project_dir/src/test/java"
+
+  log_info "Creating proper package structure..."
+
+  # Create main source package structure
+  local packages=("config" "controller" "service" "repository" "model" "dto" "exception" "util")
+  for pkg in "${packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg" || {
+      log_error "Failed to create package: $pkg"
+      return 1
+    }
+  done
+
+  # Create test package structure mirroring main
+  for pkg in "${packages[@]}"; do
+    mkdir -p "$src_test_java/$package_path/$pkg" || {
+      log_error "Failed to create test package: $pkg"
+      return 1
+    }
+  done
+
+  log_success "Package structure created successfully"
+}
+
+create_main_application_class() {
+  local project_dir="$1" package_path="$2" app_name="$3"
+  local app_class_file="$project_dir/src/main/java/$package_path/Application.java"
+
+  log_info "Creating main Application class..."
+
+  cat > "$app_class_file" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
+
+/**
+ * Main Spring Boot Application class.
+ *
+ * This is the entry point for the $app_name application.
+ * Configured with enterprise features including async processing.
+ */
+@SpringBootApplication
+@EnableAsync
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+
+  log_success "Main Application class created"
+}
+
+create_security_config() {
+  local project_dir="$1" package_path="$2"
+  local security_config_file="$project_dir/src/main/java/$package_path/config/SecurityConfig.java"
+
+  log_info "Creating Security configuration..."
+
+  cat > "$security_config_file" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Spring Security configuration for the application.
+ *
+ * Configured with method-level security and basic authentication.
+ * In production, replace with proper authentication provider.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable) // For stateless APIs
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/auth/**", "/actuator/health", "/actuator/prometheus").permitAll()
+                .anyRequest().authenticated()
+            )
+            .httpBasic(basic -> {});
+
+        return http.build();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        UserDetails user = User.builder()
+            .username("admin")
+            .password(passwordEncoder().encode("admin123"))
+            .roles("ADMIN")
+            .build();
+
+        UserDetails apiUser = User.builder()
+            .username("api")
+            .password(passwordEncoder().encode("api123"))
+            .roles("API")
+            .build();
+
+        return new InMemoryUserDetailsManager(user, apiUser);
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+EOF
+
+  log_success "Security configuration created"
+}
+
+create_global_exception_handler() {
+  local project_dir="$1" package_path="$2"
+  local exception_handler_file="$project_dir/src/main/java/$package_path/exception/GlobalExceptionHandler.java"
+
+  log_info "Creating Global Exception Handler..."
+
+  cat > "$exception_handler_file" << EOF
+package ${package_path//"/"/"."}.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Global exception handler for the application.
+ *
+ * Provides centralized exception handling with consistent error responses.
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
+        ErrorResponse error = ErrorResponse.builder()
+            .status(HttpStatus.NOT_FOUND.value())
+            .message(ex.getMessage())
+            .timestamp(LocalDateTime.now())
+            .build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        ErrorResponse error = ErrorResponse.builder()
+            .status(HttpStatus.BAD_REQUEST.value())
+            .message("Validation failed")
+            .timestamp(LocalDateTime.now())
+            .errors(errors)
+            .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+        ErrorResponse error = ErrorResponse.builder()
+            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .message("An unexpected error occurred")
+            .timestamp(LocalDateTime.now())
+            .build();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+}
+EOF
+
+  log_success "Global Exception Handler created"
+}
+
+create_error_response_dto() {
+  local project_dir="$1" package_path="$2"
+  local error_response_file="$project_dir/src/main/java/$package_path/dto/ErrorResponse.java"
+
+  log_info "Creating Error Response DTO..."
+
+  cat > "$error_response_file" << EOF
+package ${package_path//"/"/"."}.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Builder;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+
+/**
+ * Error response DTO for consistent error handling.
+ */
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ErrorResponse {
+    private int status;
+    private String message;
+    private LocalDateTime timestamp;
+    private Map<String, String> errors;
+}
+EOF
+
+  log_success "Error Response DTO created"
+}
+
+create_resource_not_found_exception() {
+  local project_dir="$1" package_path="$2"
+  local exception_file="$project_dir/src/main/java/$package_path/exception/ResourceNotFoundException.java"
+
+  log_info "Creating Resource Not Found Exception..."
+
+  cat > "$exception_file" << EOF
+package ${package_path//"/"/"."}.exception;
+
+/**
+ * Exception thrown when a requested resource is not found.
+ */
+public class ResourceNotFoundException extends RuntimeException {
+
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+
+    public ResourceNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+EOF
+
+  log_success "Resource Not Found Exception created"
+}
+
+create_sample_entity() {
+  local project_dir="$1" package_path="$2"
+  local entity_file="$project_dir/src/main/java/$package_path/model/User.java"
+
+  log_info "Creating sample User entity..."
+
+  cat > "$entity_file" << EOF
+package ${package_path//"/"/"."}.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.LocalDateTime;
+
+/**
+ * User entity representing a system user.
+ */
+@Entity
+@Table(name = "users")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    @Column(unique = true, nullable = false)
+    private String username;
+
+    @Email(message = "Email should be valid")
+    @NotBlank(message = "Email is required")
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    @NotBlank(message = "First name is required")
+    @Size(max = 50, message = "First name cannot exceed 50 characters")
+    @Column(name = "first_name", nullable = false)
+    private String firstName;
+
+    @NotBlank(message = "Last name is required")
+    @Size(max = 50, message = "Last name cannot exceed 50 characters")
+    @Column(name = "last_name", nullable = false)
+    private String lastName;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+}
+EOF
+
+  log_success "Sample User entity created"
+}
+
+create_sample_repository() {
+  local project_dir="$1" package_path="$2"
+  local repository_file="$project_dir/src/main/java/$package_path/repository/UserRepository.java"
+
+  log_info "Creating User Repository..."
+
+  cat > "$repository_file" << EOF
+package ${package_path//"/"/"."}.repository;
+
+import ${package_path//"/"/"."}.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Repository interface for User entity operations.
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+
+    /**
+     * Find user by username.
+     * @param username the username to search for
+     * @return Optional containing the user if found
+     */
+    Optional<User> findByUsername(String username);
+
+    /**
+     * Find user by email.
+     * @param email the email to search for
+     * @return Optional containing the user if found
+     */
+    Optional<User> findByEmail(String email);
+
+    /**
+     * Find users by first name or last name.
+     * @param firstName the first name to search for
+     * @param lastName the last name to search for
+     * @return List of users matching the criteria
+     */
+    @Query("SELECT u FROM User u WHERE u.firstName LIKE %:name% OR u.lastName LIKE %:name%")
+    List<User> findByNameContaining(@Param("name") String name);
+
+    /**
+     * Check if username exists.
+     * @param username the username to check
+     * @return true if username exists, false otherwise
+     */
+    boolean existsByUsername(String username);
+
+    /**
+     * Check if email exists.
+     * @param email the email to check
+     * @return true if email exists, false otherwise
+     */
+    boolean existsByEmail(String email);
+}
+EOF
+
+  log_success "User Repository created"
+}
+
+create_sample_service() {
+  local project_dir="$1" package_path="$2"
+  local service_file="$project_dir/src/main/java/$package_path/service/UserService.java"
+
+  log_info "Creating User Service..."
+
+  cat > "$service_file" << EOF
+package ${package_path//"/"/"."}.service;
+
+import ${package_path//"/"/"."}.exception.ResourceNotFoundException;
+import ${package_path//"/"/"."}.model.User;
+import ${package_path//"/"/"."}.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+/**
+ * Service class for User business logic.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    /**
+     * Find all users.
+     * @return List of all users
+     */
+    @Cacheable(value = "users")
+    public List<User> findAll() {
+        log.info("Fetching all users");
+        return userRepository.findAll();
+    }
+
+    /**
+     * Find user by ID.
+     * @param id the user ID
+     * @return the user
+     * @throws ResourceNotFoundException if user not found
+     */
+    @Cacheable(value = "user", key = "#id")
+    public User findById(Long id) {
+        log.info("Fetching user with ID: {}", id);
+        return userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+    }
+
+    /**
+     * Find user by username.
+     * @param username the username
+     * @return Optional containing the user if found
+     */
+    public Optional<User> findByUsername(String username) {
+        log.info("Fetching user with username: {}", username);
+        return userRepository.findByUsername(username);
+    }
+
+    /**
+     * Create a new user.
+     * @param user the user to create
+     * @return the created user
+     */
+    @Transactional
+    @CacheEvict(value = {"users", "user"}, allEntries = true)
+    public User createUser(User user) {
+        log.info("Creating user with username: {}", user.getUsername());
+
+        if (userRepository.existsByUsername(user.getUsername())) {
+            throw new IllegalArgumentException("Username already exists: " + user.getUsername());
+        }
+
+        if (userRepository.existsByEmail(user.getEmail())) {
+            throw new IllegalArgumentException("Email already exists: " + user.getEmail());
+        }
+
+        User savedUser = userRepository.save(user);
+        log.info("Successfully created user with ID: {}", savedUser.getId());
+        return savedUser;
+    }
+
+    /**
+     * Update an existing user.
+     * @param id the user ID
+     * @param userDetails the updated user details
+     * @return the updated user
+     */
+    @Transactional
+    @CacheEvict(value = {"users", "user"}, key = "#id")
+    public User updateUser(Long id, User userDetails) {
+        log.info("Updating user with ID: {}", id);
+
+        User user = findById(id);
+
+        // Check if username is being changed and if it's already taken
+        if (!user.getUsername().equals(userDetails.getUsername()) &&
+            userRepository.existsByUsername(userDetails.getUsername())) {
+            throw new IllegalArgumentException("Username already exists: " + userDetails.getUsername());
+        }
+
+        // Check if email is being changed and if it's already taken
+        if (!user.getEmail().equals(userDetails.getEmail()) &&
+            userRepository.existsByEmail(userDetails.getEmail())) {
+            throw new IllegalArgumentException("Email already exists: " + userDetails.getEmail());
+        }
+
+        user.setUsername(userDetails.getUsername());
+        user.setEmail(userDetails.getEmail());
+        user.setFirstName(userDetails.getFirstName());
+        user.setLastName(userDetails.getLastName());
+
+        User updatedUser = userRepository.save(user);
+        log.info("Successfully updated user with ID: {}", updatedUser.getId());
+        return updatedUser;
+    }
+
+    /**
+     * Delete a user by ID.
+     * @param id the user ID
+     */
+    @Transactional
+    @CacheEvict(value = {"users", "user"}, key = "#id")
+    public void deleteUser(Long id) {
+        log.info("Deleting user with ID: {}", id);
+        User user = findById(id);
+        userRepository.delete(user);
+        log.info("Successfully deleted user with ID: {}", id);
+    }
+
+    /**
+     * Search users by name.
+     * @param name the name to search for
+     * @return List of users matching the search criteria
+     */
+    public List<User> searchByName(String name) {
+        log.info("Searching users by name: {}", name);
+        return userRepository.findByNameContaining(name);
+    }
+}
+EOF
+
+  log_success "User Service created"
+}
+
+create_sample_controller() {
+  local project_dir="$1" package_path="$2"
+  local controller_file="$project_dir/src/main/java/$package_path/controller/UserController.java"
+
+  log_info "Creating User Controller..."
+
+  cat > "$controller_file" << EOF
+package ${package_path//"/"/"."}.controller;
+
+import ${package_path//"/"/"."}.dto.CreateUserRequest;
+import ${package_path//"/"/"."}.dto.UpdateUserRequest;
+import ${package_path//"/"/"."}.dto.UserResponse;
+import ${package_path//"/"/"."}.model.User;
+import ${package_path//"/"/"."}.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * REST Controller for User management operations.
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+@RequiredArgsConstructor
+@Slf4j
+@Tag(name = "User Management", description = "APIs for managing users")
+public class UserController {
+
+    private final UserService userService;
+
+    /**
+     * Get all users.
+     * @return List of all users
+     */
+    @GetMapping
+    @Operation(summary = "Get all users", description = "Retrieves a list of all users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponse>> getAllUsers() {
+        log.info("REST request to get all users");
+        List<User> users = userService.findAll();
+        List<UserResponse> responses = users.stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
+    }
+
+    /**
+     * Get user by ID.
+     * @param id the user ID
+     * @return the user
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "Get user by ID", description = "Retrieves a specific user by their ID")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('API')")
+    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+        log.info("REST request to get user with ID: {}", id);
+        User user = userService.findById(id);
+        return ResponseEntity.ok(convertToResponse(user));
+    }
+
+    /**
+     * Create a new user.
+     * @param request the user creation request
+     * @return the created user
+     */
+    @PostMapping
+    @Operation(summary = "Create user", description = "Creates a new user")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
+        log.info("REST request to create user: {}", request.getUsername());
+        User user = convertToEntity(request);
+        User savedUser = userService.createUser(user);
+        return ResponseEntity.status(HttpStatus.CREATED).body(convertToResponse(savedUser));
+    }
+
+    /**
+     * Update an existing user.
+     * @param id the user ID
+     * @param request the user update request
+     * @return the updated user
+     */
+    @PutMapping("/{id}")
+    @Operation(summary = "Update user", description = "Updates an existing user")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
+                                                  @Valid @RequestBody UpdateUserRequest request) {
+        log.info("REST request to update user with ID: {}", id);
+        User user = convertToEntity(request);
+        User updatedUser = userService.updateUser(id, user);
+        return ResponseEntity.ok(convertToResponse(updatedUser));
+    }
+
+    /**
+     * Delete a user.
+     * @param id the user ID
+     * @return no content response
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete user", description = "Deletes a user by ID")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        log.info("REST request to delete user with ID: {}", id);
+        userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Search users by name.
+     * @param name the search term
+     * @return list of matching users
+     */
+    @GetMapping("/search")
+    @Operation(summary = "Search users", description = "Search users by name")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('API')")
+    public ResponseEntity<List<UserResponse>> searchUsers(@RequestParam String name) {
+        log.info("REST request to search users by name: {}", name);
+        List<User> users = userService.searchByName(name);
+        List<UserResponse> responses = users.stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
+    }
+
+    private UserResponse convertToResponse(User user) {
+        return UserResponse.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .firstName(user.getFirstName())
+            .lastName(user.getLastName())
+            .createdAt(user.getCreatedAt())
+            .updatedAt(user.getUpdatedAt())
+            .build();
+    }
+
+    private User convertToEntity(CreateUserRequest request) {
+        return User.builder()
+            .username(request.getUsername())
+            .email(request.getEmail())
+            .firstName(request.getFirstName())
+            .lastName(request.getLastName())
+            .build();
+    }
+
+    private User convertToEntity(UpdateUserRequest request) {
+        return User.builder()
+            .username(request.getUsername())
+            .email(request.getEmail())
+            .firstName(request.getFirstName())
+            .lastName(request.getLastName())
+            .build();
+    }
+}
+EOF
+
+  log_success "User Controller created"
+}
+
+create_sample_dtos() {
+  local project_dir="$1" package_path="$2"
+
+  # Create UserResponse DTO
+  cat > "$project_dir/src/main/java/$package_path/dto/UserResponse.java" << EOF
+package ${package_path//"/"/"."}.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Builder;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * User Response DTO.
+ */
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UserResponse {
+    private Long id;
+    private String username;
+    private String email;
+    private String firstName;
+    private String lastName;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+}
+EOF
+
+  # Create CreateUserRequest DTO
+  cat > "$project_dir/src/main/java/$package_path/dto/CreateUserRequest.java" << EOF
+package ${package_path//"/"/"."}.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+/**
+ * Create User Request DTO.
+ */
+@Data
+public class CreateUserRequest {
+
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
+    @Email(message = "Email should be valid")
+    @NotBlank(message = "Email is required")
+    private String email;
+
+    @NotBlank(message = "First name is required")
+    @Size(max = 50, message = "First name cannot exceed 50 characters")
+    private String firstName;
+
+    @NotBlank(message = "Last name is required")
+    @Size(max = 50, message = "Last name cannot exceed 50 characters")
+    private String lastName;
+}
+EOF
+
+  # Create UpdateUserRequest DTO
+  cat > "$project_dir/src/main/java/$package_path/dto/UpdateUserRequest.java" << EOF
+package ${package_path//"/"/"."}.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+/**
+ * Update User Request DTO.
+ */
+@Data
+public class UpdateUserRequest {
+
+    @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
+    @Email(message = "Email should be valid")
+    @NotBlank(message = "Email is required")
+    private String email;
+
+    @NotBlank(message = "First name is required")
+    @Size(max = 50, message = "First name cannot exceed 50 characters")
+    private String firstName;
+
+    @NotBlank(message = "Last name is required")
+    @Size(max = 50, message = "Last name cannot exceed 50 characters")
+    private String lastName;
+}
+EOF
+
+  log_success "User DTOs created"
+}
+
+create_logging_config() {
+  local project_dir="$1"
+  local logback_file="$project_dir/src/main/resources/logback-spring.xml"
+
+  log_info "Creating logging configuration..."
+
+  cat > "$logback_file" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProfile name="!prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/application.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/application-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>100MB</totalSizeCap>
+                <maxFileSize>10MB</maxFileSize>
+            </rollingPolicy>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <logLevel/>
+                    <loggerName/>
+                    <message/>
+                    <mdc/>
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Common logger configurations -->
+    <logger name="org.springframework.security" level="DEBUG"/>
+    <logger name="org.hibernate.SQL" level="DEBUG"/>
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE"/>
+    <logger name="com.zaxxer.hikari" level="DEBUG"/>
+</configuration>
+EOF
+
+  log_success "Logging configuration created"
+}
+
+create_ai_coding_rules() {
+  local project_dir="$1" assistant="${2:-cursor}"
+  local docs_dir="$project_dir/docs"
+
+  mkdir -p "$docs_dir" || {
+    log_error "Failed to create docs directory"
+    return 1
+  }
+
+  local rules_file="$docs_dir/ai-coding-rules.md"
+
+  log_info "Copying AI coding rules for $assistant..."
+
+  # Copy the ai-coding-rules.md content
+  if [[ -f "ai-coding-rules.md" ]]; then
+    cp "ai-coding-rules.md" "$rules_file" || {
+      log_error "Failed to copy ai-coding-rules.md"
+      return 1
+    }
+  else
+    # Create a default version if the file doesn't exist
+    cat > "$rules_file" << 'EOF'
+# AI Code Assistant Rules and Conventions for Java + Spring Boot Projects
+
+## Core Development Principles
+
+### Language and Framework Standards
+- **Java Version**: Use Java 17 or 21 LTS versions
+- **Spring Boot Version**: Use the latest stable version (3.x+)
+- **Build Tool**: Prefer Maven 3.6.3+ over Gradle, unless project specifically requires Gradle
+- **Dependency Management**: Use Spring Boot Starters for consistent dependency management
+- **Code Style**: Follow Google Java Style Guide or similar established conventions
+
+### Project Structure and Architecture
+```
+src/
+├── main/
+│   ├── java/
+│   │   └── com/yourcompany/yourapp/
+│   │       ├── Application.java (Main class)
+│   │       ├── config/           (Configuration classes)
+│   │       ├── controller/       (REST controllers)
+│   │       ├── service/          (Business logic)
+│   │       ├── repository/       (Data access layer)
+│   │       ├── model/           (JPA entities)
+│   │       ├── dto/             (Data Transfer Objects)
+│   │       ├── exception/       (Custom exceptions)
+│   │       └── util/            (Utility classes)
+│   └── resources/
+│       ├── application.yml       (Main configuration)
+│       ├── application-{env}.yml (Environment configs)
+│       └── logback-spring.xml   (Logging configuration)
+└── test/
+    └── java/                    (Test classes mirror main structure)
+```
+
+## Spring Boot Best Practices
+
+### Configuration Management
+- **Externalize Configuration**: Use `application.yml` over `application.properties`
+- **Environment Profiles**: Create separate profiles for dev, staging, and production
+- **Property Binding**: Use `@ConfigurationProperties` for complex configurations
+- **Sensitive Data**: Never hardcode secrets; use environment variables or Spring Cloud Config
+
+### Dependency Injection
+- **Constructor Injection**: Always prefer constructor injection over field injection
+- **Final Fields**: Mark injected dependencies as `final`
+- **Avoid @Autowired**: Use constructor injection instead of `@Autowired` annotation
+
+### REST API Design
+- **HTTP Methods**: Use correct HTTP verbs (GET, POST, PUT, DELETE, PATCH)
+- **HTTP Status Codes**: Return appropriate status codes (200, 201, 400, 404, 500, etc.)
+- **Resource Naming**: Use plural nouns for collections (`/users`, not `/user`)
+- **URL Structure**: Follow RESTful conventions
+
+### Data Transfer Objects (DTOs)
+- **Always Use DTOs**: Never expose JPA entities directly in REST APIs
+- **Separate Request/Response**: Create separate DTOs for requests and responses
+- **Validation**: Apply Bean Validation annotations on DTOs
+
+### Exception Handling
+- **Global Exception Handling**: Use `@ControllerAdvice` for centralized exception handling
+- **Custom Exceptions**: Create meaningful custom exceptions
+- **Error Responses**: Return consistent error response structure
+
+### Database and JPA
+- **Repository Pattern**: Use Spring Data JPA repositories
+- **Entity Relationships**: Be careful with bidirectional relationships and lazy loading
+- **Database Migrations**: Use Flyway or Liquibase for database versioning
+- **Connection Pooling**: Configure HikariCP properly
+
+## Security Best Practices
+
+### Spring Security Configuration
+- **HTTPS Only**: Force HTTPS in production environments
+- **Authentication**: Implement proper authentication (JWT, OAuth2, etc.)
+- **Authorization**: Use method-level security with `@PreAuthorize`
+
+## Testing Best Practices
+
+### Test Structure
+- **Test Pyramid**: Write more unit tests, fewer integration tests
+- **Naming Convention**: Use descriptive test method names
+- **AAA Pattern**: Arrange, Act, Assert structure
+
+### JUnit 5 and Mockito
+- **Annotations**: Use `@ExtendWith(MockitoExtension.class)` for JUnit 5
+- **Mock Creation**: Use `@Mock` and `@InjectMocks` annotations
+- **Verification**: Verify interactions with `verify()`
+
+### Spring Boot Test Annotations
+- **@SpringBootTest**: For integration tests
+- **@WebMvcTest**: For testing web layer only
+- **@DataJpaTest**: For testing JPA repositories
+
+## Code Quality and Clean Code
+
+### Naming Conventions
+- **Classes**: PascalCase (`UserService`, `OrderController`)
+- **Methods**: camelCase (`findUserById`, `calculateTotalAmount`)
+- **Variables**: camelCase (`userId`, `totalAmount`)
+- **Constants**: UPPER_SNAKE_CASE (`MAX_RETRY_ATTEMPTS`)
+
+### Method Design
+- **Single Responsibility**: Each method should do one thing
+- **Method Length**: Keep methods under 20-30 lines
+- **Parameter Count**: Limit parameters to 3-4, use objects for more
+
+### Error Handling
+- **Fail Fast**: Validate inputs early
+- **Meaningful Messages**: Provide clear error messages
+
+## Logging Best Practices
+
+### Logging Configuration
+- **Framework**: Use SLF4J with Logback (Spring Boot default)
+- **Log Levels**: DEBUG for development, INFO for production
+- **Structured Logging**: Use JSON format for production
+
+## Docker Best Practices
+
+### Multi-Stage Dockerfile
+- **Build Stage**: Use full JDK for building
+- **Runtime Stage**: Use slim JRE for running
+- **Layer Optimization**: Copy dependencies before source code
+
+## Performance Optimization
+
+### JVM Tuning
+- **Heap Size**: Set appropriate heap size (`-Xms` and `-Xmx`)
+- **Garbage Collection**: Use G1GC for most applications
+
+## Monitoring and Observability
+
+### Spring Boot Actuator
+- **Endpoints**: Enable necessary actuator endpoints
+- **Metrics**: Export metrics to monitoring systems
+- **Health Checks**: Implement custom health indicators
+
+## API Documentation
+
+### OpenAPI/Swagger
+- **springdoc-openapi**: Use for API documentation
+- **Annotations**: Document APIs with OpenAPI annotations
+
+## General Guidelines for AI Code Assistants
+
+1. **Always follow Spring Boot conventions and best practices**
+2. **Prefer established patterns over custom solutions**
+3. **Include proper error handling and logging**
+4. **Write testable code with dependency injection**
+5. **Use meaningful names for classes, methods, and variables**
+6. **Keep methods small and focused on single responsibility**
+7. **Include proper validation and security measures**
+8. **Follow clean code principles**
+9. **Add necessary comments for complex business logic**
+10. **Consider performance implications of code changes**
+
+When generating code, always consider the broader context of a production-ready Spring Boot application and include appropriate error handling, logging, and testing strategies.
+EOF
+  fi
+
+  log_success "AI coding rules copied for $assistant"
+}
+
 create_project_backup() {
   local project_dir="$1" arch="$2"
   local timestamp
@@ -2156,6 +3220,26 @@ sboot() {
     log_error "Failed to change to project directory: $DIR"
     return 1
   }
+
+  # Get package path for proper structure creation
+  local GROUP_ID_PATH
+  GROUP_ID_PATH="${GROUP_ID//.//}"
+  local PACKAGE_PATH="$GROUP_ID_PATH/$ARTIFACT_ID"
+
+  # Create proper package structure and enterprise classes
+  create_package_structure "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_main_application_class "$PROJECT_DIR" "$PACKAGE_PATH" "$DIR" || return 1
+  create_security_config "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_global_exception_handler "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_error_response_dto "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_resource_not_found_exception "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_sample_entity "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_sample_repository "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_sample_service "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_sample_controller "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_sample_dtos "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  create_logging_config "$PROJECT_DIR" || return 1
+  create_ai_coding_rules "$PROJECT_DIR" "${AI_ASSISTANT:-cursor}" || return 1
 
   # Add enterprise features
   add_enterprise_dependencies "$ARCH" "pom.xml" || return 1
