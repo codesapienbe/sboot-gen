@@ -651,9 +651,9 @@ get_extra_dependencies() {
   local arch="$1"
   case "$arch" in
     modulith) echo "security,cache,flyway,prometheus,testcontainers" ;;
-    microservice) echo "security,cache,flyway,prometheus,cloud-config,testcontainers,resilience4j" ;;
+    microservice) echo "security,cache,flyway,prometheus,cloud-config,testcontainers,resilience4j,gateway" ;;
     monolith) echo "security,cache,flyway,prometheus,testcontainers" ;;
-    eda-kafka) echo "kafka,actuator,security,cache,testcontainers" ;;
+    eda-kafka) echo "kafka,actuator,security,cache,testcontainers,zipkin" ;;
     *) log_error "Unknown architecture: $arch"; return 1 ;;
   esac
 }
@@ -2577,10 +2577,13 @@ create_eda_kafka_classes() {
   # Create shared entities and DTOs
   create_shared_entities "$project_dir" "$package_path"
 
-  # Create Docker Compose with all three services
+  # Create API Gateway service
+  create_api_gateway "$project_dir" "$package_path"
+
+  # Create Docker Compose with all services
   create_eda_docker_compose "$project_dir"
 
-  log_success "EDA-Kafka microservices created"
+  log_success "EDA-Kafka microservices with API Gateway created"
 }
 
 create_shared_user_entity() {
@@ -3010,6 +3013,16 @@ create_producer_pom() {
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Distributed Tracing -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-sleuth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-sleuth-zipkin</artifactId>
+        </dependency>
+
         <!-- Shared module -->
         <dependency>
             <groupId>${package_path//"/"/"."}</groupId>
@@ -3129,6 +3142,16 @@ create_consumer_pom() {
             <artifactId>jjwt-jackson</artifactId>
             <version>0.11.5</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Distributed Tracing -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-sleuth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-sleuth-zipkin</artifactId>
         </dependency>
 
         <!-- Shared module -->
@@ -3263,6 +3286,16 @@ create_user_pom() {
             <artifactId>jjwt-jackson</artifactId>
             <version>0.11.5</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Distributed Tracing -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-sleuth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-sleuth-zipkin</artifactId>
         </dependency>
 
         <!-- Shared module -->
@@ -3468,10 +3501,19 @@ spring:
 user-service:
   url: http://localhost:8080
 
+# Distributed Tracing
+spring:
+  zipkin:
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      probability: 1.0
+
 logging:
   level:
     org.springframework.kafka: DEBUG
     org.apache.kafka: INFO
+    org.springframework.cloud.sleuth: DEBUG
 
 management:
   endpoints:
@@ -4624,6 +4666,169 @@ public class User {
 EOF
 }
 
+create_api_gateway() {
+  local project_dir="$1" package_path="$2"
+  local gateway_dir="$project_dir/gateway"
+
+  # Create gateway service directory structure
+  mkdir -p "$gateway_dir/src/main/java/$package_path"
+  mkdir -p "$gateway_dir/src/main/resources"
+  mkdir -p "$gateway_dir/src/test/java/$package_path"
+
+  # Create gateway service pom.xml
+  create_gateway_pom "$gateway_dir" "$package_path"
+
+  # Create gateway service application.yml
+  create_gateway_application_yml "$gateway_dir"
+
+  # Create gateway service classes
+  create_gateway_application_class "$gateway_dir" "$package_path"
+  create_gateway_config "$gateway_dir" "$package_path"
+  create_gateway_filter "$gateway_dir" "$package_path"
+
+  log_info "API Gateway service created"
+}
+
+create_gateway_pom() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/pom.xml" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>${package_path//"/"/"."}</groupId>
+    <artifactId>gateway</artifactId>
+    <version>0.0.1</version>
+    <name>gateway</name>
+    <description>API Gateway Service</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-cloud.version>2022.0.4</spring-cloud.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>\${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Spring Cloud Gateway -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!-- Service Discovery -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- Security -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Distributed Tracing -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-sleuth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-sleuth-zipkin</artifactId>
+        </dependency>
+
+        <!-- Rate Limiting -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Actuator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Utilities -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+}
+
 create_eda_docker_compose() {
   local project_dir="$1"
 
@@ -4667,6 +4872,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - eda-network
+
+  # Zipkin for Distributed Tracing
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: eda-zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      - STORAGE_TYPE=mem
     networks:
       - eda-network
 

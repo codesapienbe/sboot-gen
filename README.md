@@ -1047,11 +1047,13 @@ bash -n sbootgen.sh
 - Comprehensive API Documentation with OpenAPI
 - Smart Package Name Generation (io.github.codesapienbe.* defaults)
 - Enhanced Interactive Mode with optional package naming
-- **EDA-Kafka Microservices**: Three-service architecture (user-srv, producer-srv, consumer-srv)
+- **EDA-Kafka Microservices**: Four-service architecture (gateway, user-srv, producer-srv, consumer-srv)
 - **JWT Authentication**: Cross-service authentication with role-based access
 - **JSON Message Processing**: String keys, JSON values with Kafka
-- **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper
+- **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper/Zipkin
 - **Circuit Breaker**: Resilience4j Circuit Breaker for microservice HTTP communication (not Kafka)
+- **Distributed Tracing**: Zipkin integration for observability across all services
+- **API Gateway**: Spring Cloud Gateway with rate limiting and JWT validation
 - **GitHub Actions CI/CD**: Complete pipeline with build, test, security scan, and deployment
 - **Cloud Deployment**: Ready-to-deploy configurations for AWS, Azure, and GCP
 
@@ -1240,11 +1242,11 @@ app:
 
 ### **Complete Usage Example**
 ```bash
-# Create event-driven microservices system
-sboot eda-kafka event-system
+# Create enterprise-grade microservices system
+sboot eda-kafka enterprise-system
 
 # Build and start all services
-cd event-system
+cd enterprise-system
 
 # Build shared module first
 cd shared && mvn clean install && cd ..
@@ -1253,9 +1255,11 @@ cd shared && mvn clean install && cd ..
 docker-compose up --build
 
 # Services will be available at:
+# API Gateway:                http://localhost:8083
 # User Service (JWT Auth):    http://localhost:8080
 # Producer Service:           http://localhost:8081
 # Consumer Service:           http://localhost:8082
+# Zipkin (Tracing UI):        http://localhost:9411
 # Kafka:                      localhost:9092
 ```
 
