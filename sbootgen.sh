@@ -6893,12 +6893,14 @@ main() {
 
   if [[ "$is_temp_execution" == "true" ]]; then
     # For temp execution, just run the command directly without installation
+    echo "DEBUG: Temp execution detected"
     if [[ $# -gt 0 ]]; then
       log_debug "Running sboot command directly from temp location"
       sboot "$@"
       exit $?
     else
       # No arguments - show help
+      echo "DEBUG: No arguments, showing help"
       show_install_banner
       print_usage
       echo
