@@ -48,44 +48,132 @@ A professional, enterprise-grade Spring Boot project generator with comprehensiv
 - **Configuration Processor** - Metadata generation
 - **H2/PostgreSQL** - Database support
 
-### 🏛️ **Generated Project Structure**
+### 🏛️ **Architecture-Specific Project Structures**
+
+#### **Modulith Architecture** (`sboot modulith my-app`)
 ```
-your-app/
-├── src/main/java/com/example/yourapp/
-│   ├── Application.java              # Main Spring Boot class
+my-app/
+├── src/main/java/com/example/myapp/
+│   ├── Application.java              # @SpringBootApplication + @Modulith
 │   ├── config/
-│   │   └── SecurityConfig.java       # Security configuration
-│   ├── controller/
-│   │   └── UserController.java       # REST controllers
-│   ├── service/
-│   │   └── UserService.java          # Business logic
-│   ├── repository/
-│   │   └── UserRepository.java       # Data access layer
-│   ├── model/
-│   │   └── User.java                 # JPA entities
-│   ├── dto/
-│   │   ├── UserResponse.java         # Response DTOs
-│   │   ├── CreateUserRequest.java    # Request DTOs
-│   │   └── UpdateUserRequest.java
-│   ├── exception/
-│   │   ├── GlobalExceptionHandler.java # Exception handling
-│   │   ├── ResourceNotFoundException.java
-│   │   └── ErrorResponse.java
-│   └── util/                         # Utility classes
-├── src/main/resources/
-│   ├── application.yml               # Main configuration
-│   ├── application-local.yml         # Local profile
-│   ├── application-docker.yml        # Docker profile
-│   ├── application-prod.yml          # Production profile
-│   └── logback-spring.xml            # Logging configuration
-├── src/test/java/                    # Test structure mirrors main
+│   │   └── SecurityConfig.java       # Multi-context security
+│   ├── exception/                    # Shared exceptions
+│   ├── util/                        # Shared utilities
+│   ├── model/shared/                # Shared entities
+│   │   └── User.java
+│   ├── dto/shared/                  # Shared DTOs
+│   ├── user/                        # User bounded context
+│   │   ├── controller/UserController.java
+│   │   ├── service/UserService.java
+│   │   ├── repository/UserRepository.java
+│   │   ├── model/UserDetails.java
+│   │   ├── dto/User*.java
+│   │   └── event/UserEvents.java
+│   ├── order/                       # Order bounded context
+│   │   ├── controller/OrderController.java
+│   │   ├── service/OrderService.java
+│   │   └── ...
+│   └── inventory/                   # Inventory bounded context
+│       ├── controller/InventoryController.java
+│       ├── service/InventoryService.java
+│       └── ...
 ├── docs/
-│   └── ai-coding-rules.md            # AI assistant guidelines
-├── Dockerfile                        # Multi-stage Docker build
-├── docker-compose.yml                # Local development stack
-├── Makefile                          # Build and run commands
-└── pom.xml                           # Maven configuration
+│   └── ai-coding-rules.md
+└── [docker-compose.yml, Dockerfile, etc.]
 ```
+
+#### **Microservice Architecture** (`sboot microservice user-service`)
+```
+user-service/
+├── src/main/java/com/example/userservice/
+│   ├── Application.java              # @EnableDiscoveryClient
+│   ├── config/
+│   │   └── SecurityConfig.java       # JWT-based security
+│   ├── controller/UserController.java
+│   ├── service/UserService.java
+│   ├── repository/UserRepository.java
+│   ├── model/User.java
+│   ├── dto/                         # Request/Response DTOs
+│   ├── exception/                   # Exception handling
+│   ├── util/                        # Utilities
+│   ├── client/                      # Feign clients
+│   ├── resilience/                  # Circuit breakers
+│   └── health/                      # Health indicators
+└── [docker-compose.yml, Dockerfile, etc.]
+```
+
+#### **Monolith Architecture** (`sboot monolith my-app`)
+```
+my-app/
+├── src/main/java/com/example/myapp/
+│   ├── Application.java              # @EnableScheduling + @EnableAsync
+│   ├── config/
+│   │   └── SecurityConfig.java       # Form-based login
+│   ├── controller/                   # REST controllers
+│   ├── service/                      # Business services
+│   ├── repository/                   # Data repositories
+│   ├── model/                        # JPA entities
+│   ├── dto/                          # Data transfer objects
+│   ├── exception/                    # Exception handling
+│   ├── util/                         # Utility classes
+│   ├── aspect/                       # AOP aspects
+│   ├── domain/                       # Domain services
+│   └── scheduler/                    # Scheduled tasks
+└── [docker-compose.yml, Dockerfile, etc.]
+```
+
+#### **EDA-Kafka Architecture** (`sboot eda-kafka event-system`)
+```
+event-system/
+├── shared/                           # Shared entities & DTOs
+│   ├── src/main/java/io/github/codesapienbe/shared/
+│   │   ├── User.java                 # Shared User entity
+│   │   ├── Role.java                 # Shared Role entity
+│   │   ├── Message.java              # Shared Message entity
+│   │   └── Topic.java                # Shared Topic entity
+│   └── pom.xml
+├── user-srv/                         # JWT Authentication Service
+│   ├── src/main/java/io/github/codesapienbe/
+│   │   ├── Application.java          # @SpringBootApplication
+│   │   ├── config/SecurityConfig.java # JWT configuration
+│   │   ├── controller/AuthController.java # Login endpoints
+│   │   ├── service/AuthService.java  # JWT token handling
+│   │   ├── util/JwtUtils.java        # JWT utilities
+│   │   └── model/User.java           # User entity
+│   └── pom.xml
+├── producer-srv/                     # Message Producer Service
+│   ├── src/main/java/io/github/codesapienbe/
+│   │   ├── Application.java          # @SpringBootApplication
+│   │   ├── config/
+│   │   │   ├── SecurityConfig.java   # JWT validation
+│   │   │   └── KafkaConfig.java      # Producer configuration
+│   │   ├── controller/ProducerController.java # REST endpoints
+│   │   ├── service/ProducerService.java # Message production
+│   │   └── model/                    # Producer models
+│   └── pom.xml
+├── consumer-srv/                     # Message Consumer Service
+│   ├── src/main/java/io/github/codesapienbe/
+│   │   ├── Application.java          # @EnableKafka
+│   │   ├── config/
+│   │   │   ├── SecurityConfig.java   # JWT validation
+│   │   │   └── KafkaConfig.java      # Consumer configuration
+│   │   ├── listener/MessageEventListener.java # Kafka listeners
+│   │   ├── service/ConsumerService.java # Message processing
+│   │   └── model/                    # Consumer models
+│   └── pom.xml
+├── docker-compose.yml                 # All services + Kafka + Zookeeper
+└── Dockerfile                         # Shared Dockerfile for all services
+```
+
+### 📁 **Common Structure Elements**
+All architectures include:
+- **Multi-profile configurations** (`application.yml`, `*-local.yml`, `*-docker.yml`, `*-prod.yml`)
+- **Structured logging** (`logback-spring.xml`)
+- **Comprehensive testing** (JUnit 5, Mockito, Testcontainers, H2, Java Faker)
+- **Docker support** (Multi-stage builds, docker-compose)
+- **API documentation** (OpenAPI/Swagger)
+- **Code quality tools** (Spotless, Checkstyle, JaCoCo)
+- **AI assistant guidelines** (`docs/ai-coding-rules.md`)
 
 ### 🔧 **Code Quality & Security**
 - **Spotless** - Automated code formatting (Google Java Style)
@@ -158,18 +246,46 @@ source sbootgen.sh
 ```
 
 ### Generate Your First Project
+
+#### Interactive Mode (Recommended)
 ```bash
-# Create a modular monolith
+# Prompts for project name and package interactively
+sboot modulith          # Choose architecture, enter project name & package
+sboot microservice      # Choose architecture, enter project name & package
+sboot monolith         # Choose architecture, enter project name & package
+sboot eda-kafka        # Choose architecture, enter project name & package
+```
+
+#### Direct Mode
+```bash
+# Specify everything on command line
 sboot modulith my-awesome-app
-
-# Create a microservice
 sboot microservice user-service
-
-# Create a traditional monolith
 sboot monolith legacy-app
-
-# Create an event-driven app
 sboot eda-kafka event-processor
+```
+
+#### Interactive Example
+```bash
+$ sboot modulith
+╔════════════════════════════════════════════════════════╗
+║  ☕️  Interactive Project Setup                   ║
+╚════════════════════════════════════════════════════════╝
+
+Available architectures:
+  modulith      - Domain-driven modular monolith
+  microservice  - Standalone microservice
+  monolith      - Traditional layered monolith
+  eda-kafka     - Event-driven architecture with Kafka
+
+Choose architecture (modulith/microservice/monolith/eda-kafka): modulith
+Enter project directory name: my-awesome-app
+Enter base package name (e.g., com.example.myapp): [press enter for default]
+
+Using default package: io.github.codesapienbe.myawesomeapp
+
+Creating modulith project in directory: my-awesome-app
+Using package: io.github.codesapienbe.myawesomeapp
 ```
 
 ### Script Management
@@ -237,36 +353,78 @@ The script automatically detects your shell:
 
 ### Command Syntax
 ```bash
-# Direct usage with arguments
-sboot <architecture> <project-directory>
-
-# Interactive mode (prompts for input)
+# Interactive mode - prompts for architecture, project name, and package
 sboot
 
+# Interactive mode with pre-selected architecture - prompts for project name and package
+sboot <architecture>
+
+# Direct mode - specify everything on command line
+sboot <architecture> <project-directory>
+
 # Examples
-sboot modulith ecommerce-platform
-sboot microservice payment-service
-sboot monolith admin-portal
-sboot eda-kafka event-processor
+sboot                                   # Interactive: choose everything
+sboot modulith                        # Interactive: prompts for project name & package
+sboot modulith ecommerce-platform     # Direct: uses default package
+sboot microservice payment-service     # Direct: uses default package
+sboot monolith admin-portal           # Direct: uses default package
+sboot eda-kafka event-processor       # Direct: uses default package
 ```
 
 ### Interactive Mode
 
-When you run `sboot` without arguments, it enters interactive mode:
+The generator supports multiple levels of interactivity:
 
+#### Full Interactive Mode
 ```bash
-sboot
+sboot  # No arguments - prompts for everything
 ```
 
-This will prompt you to:
-1. **Choose an architecture** from the available options
-2. **Enter a project directory name** (with validation)
+#### Architecture-Preselected Mode
+```bash
+sboot modulith     # Prompts for project name and package
+sboot microservice # Prompts for project name and package
+sboot monolith     # Prompts for project name and package
+sboot eda-kafka    # Prompts for project name and package
+```
 
-The interactive mode provides:
+#### What Gets Prompted
+
+**Full Interactive Mode** (`sboot`):
+1. **Choose an architecture** from available options
+2. **Enter a project directory name** (with validation)
+3. **Enter a base package name** (optional, defaults to `io.github.codesapienbe.<project-name>`)
+
+**Architecture-Preselected Mode** (`sboot <architecture>`):
+1. **Enter a project directory name** (with validation)
+2. **Enter a base package name** (optional, defaults to `io.github.codesapienbe.<project-name>`)
+
+#### Interactive Features
 - ✅ **Clear architecture descriptions**
 - ✅ **Real-time input validation**
+- ✅ **Smart default package names**
+- ✅ **Package name format validation**
 - ✅ **User-friendly error messages**
 - ✅ **Guided setup process**
+- ✅ **Duplicate directory detection**
+
+#### Package Name Generation
+When you leave the package name empty, it automatically generates:
+```
+io.github.codesapienbe.<cleaned-project-name>
+```
+
+**Examples:**
+- `my-awesome-app` → `io.github.codesapienbe.myawesomeapp`
+- `UserManagement` → `io.github.codesapienbe.usermanagement`
+- `payment_service` → `io.github.codesapienbe.paymentservice`
+- `E-commerce_Platform!` → `io.github.codesapienbe.ecommerceplatform`
+
+**Transformation Rules:**
+- Converts to lowercase
+- Removes special characters
+- Keeps only alphanumeric characters
+- Trims whitespace
 
 ### Available Architectures
 
@@ -887,6 +1045,12 @@ bash -n sbootgen.sh
 - Production-ready classes: Security, Exception Handling, DTOs
 - Structured Logging Configuration with Logback
 - Comprehensive API Documentation with OpenAPI
+- Smart Package Name Generation (io.github.codesapienbe.* defaults)
+- Enhanced Interactive Mode with optional package naming
+- **EDA-Kafka Microservices**: Three-service architecture (user-srv, producer-srv, consumer-srv)
+- **JWT Authentication**: Cross-service authentication with role-based access
+- **JSON Message Processing**: String keys, JSON values with Kafka
+- **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper
 
 
 ## 🎯 Roadmap
@@ -1071,39 +1235,128 @@ app:
       retry-enabled: true
 ```
 
-### **Usage Example**
+### **Complete Usage Example**
 ```bash
-# Create event-driven app
-sboot eda-kafka event-processor
+# Create event-driven microservices system
+sboot eda-kafka event-system
 
-# Start with Docker (includes Kafka)
-cd event-processor
-make docker-up
+# Build and start all services
+cd event-system
 
-# App will be available at localhost:8080
-# Kafka broker at localhost:9092
-# Kafka UI at localhost:9094
+# Build shared module first
+cd shared && mvn clean install && cd ..
+
+# Build and run all services with Docker
+docker-compose up --build
+
+# Services will be available at:
+# User Service (JWT Auth):    http://localhost:8080
+# Producer Service:           http://localhost:8081
+# Consumer Service:           http://localhost:8082
+# Kafka:                      localhost:9092
 ```
+
+### **Message Flow Demonstration**
+
+#### **1. Get JWT Token**
+```bash
+# Login to get JWT token
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"producer","password":"producer123"}'
+
+# Response: {"token":"eyJ...","type":"Bearer","expiresIn":"86400000"}
+```
+
+#### **2. Send Message via Producer Service**
+```bash
+# Send a message using the JWT token
+curl -X POST http://localhost:8081/api/v1/producer/send \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJ..." \
+  -d '{
+    "id": "msg-001",
+    "content": "Hello from Producer Service!",
+    "sender": "producer-service",
+    "topic": "message-events",
+    "timestamp": "2024-01-01T10:00:00",
+    "type": "INFO"
+  }'
+
+# Response: {"status":"success","messageId":"msg-001"}
+```
+
+#### **3. Consumer Service Automatically Processes**
+```bash
+# Check consumer service logs - message is automatically processed
+docker-compose logs consumer-srv
+
+# Expected log: "Received message from topic message-events: key=msg-001, message=..."
+# Expected log: "Message processed successfully: msg-001"
+```
+
+#### **4. Send Test Message**
+```bash
+# Use the built-in test endpoint
+curl -X POST http://localhost:8081/api/v1/producer/test \
+  -H "Authorization: Bearer eyJ..."
+
+# This creates and sends a test message automatically
+```
+
+### **Service Endpoints**
+
+#### **User Service (Port 8080)**
+```bash
+# Authentication endpoints
+POST /api/v1/auth/login      # Get JWT token
+POST /api/v1/auth/validate   # Validate token
+GET  /api/v1/auth/me         # Get current user
+```
+
+#### **Producer Service (Port 8081)**
+```bash
+# Message production
+POST /api/v1/producer/send   # Send custom message
+POST /api/v1/producer/test   # Send test message
+```
+
+#### **Consumer Service (Port 8082)**
+```bash
+# Message monitoring (no direct endpoints - listens to Kafka)
+# Check logs or add monitoring endpoints as needed
+```
+
+### **Default Users**
+- **admin/admin123**: ADMIN role (all services)
+- **producer/producer123**: PRODUCER role (message sending)
+- **consumer/consumer123**: CONSUMER role (message receiving)
 
 ### **Key Components**
 
+#### **Microservices Architecture**
+- **user-srv**: JWT authentication service (port 8080)
+- **producer-srv**: Message publishing service (port 8081)
+- **consumer-srv**: Message consumption service (port 8082)
+- **shared**: Common entities and DTOs module
+
 #### **Event Processing**
-- **Event Producers**: Idempotent, transactional JSON event publishing
-- **Event Consumers**: Batch processing with configurable concurrency
-- **Event Handlers**: Business logic for event processing
-- **Event Streams**: Kafka Streams for real-time event processing
+- **JSON Serialization**: String keys, JSON values
+- **Event Producers**: RESTful message publishing
+- **Event Consumers**: Kafka listeners with acknowledgment
+- **Event Handlers**: Business logic for different message types
 
-#### **Reliability & Resilience**
-- **Dead Letter Topics**: Automatic error event routing
-- **Retry Mechanisms**: Configurable exponential backoff
-- **Circuit Breakers**: Fault tolerance for downstream services
-- **Health Monitoring**: Kafka connectivity and consumer lag monitoring
+#### **Authentication & Security**
+- **JWT Tokens**: Bearer token authentication across services
+- **Role-based Access**: PRODUCER, CONSUMER, ADMIN roles
+- **Token Validation**: Cross-service authentication
+- **Secure Endpoints**: Protected APIs with method-level security
 
-#### **Enterprise Features**
-- **Security**: SASL/SSL authentication and encryption
-- **Monitoring**: Metrics and observability integration
-- **Performance**: Optimized batch sizes and compression
-- **Exactly-Once Processing**: Transactional guarantees
+#### **Infrastructure**
+- **Apache Kafka**: Message broker with Zookeeper
+- **Docker Compose**: Multi-service orchestration
+- **Health Checks**: Service readiness validation
+- **Load Balancing**: Service discovery ready
 
 ## 🧠 Smart & Safe Features
 

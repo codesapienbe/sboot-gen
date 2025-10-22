@@ -1788,52 +1788,159 @@ initialize_git_repository() {
 }
 
 create_package_structure() {
-  local project_dir="$1" package_path="$2"
+  local project_dir="$1" package_path="$2" arch="$3"
   local src_main_java="$project_dir/src/main/java"
   local src_test_java="$project_dir/src/test/java"
 
-  log_info "Creating proper package structure..."
+  log_info "Creating $arch-specific package structure..."
 
-  # Create main source package structure
-  local packages=("config" "controller" "service" "repository" "model" "dto" "exception" "util")
-  for pkg in "${packages[@]}"; do
-    mkdir -p "$src_main_java/$package_path/$pkg" || {
-      log_error "Failed to create package: $pkg"
+  case "$arch" in
+    "modulith")
+      # Modulith: Multiple bounded contexts with shared kernel
+      create_modulith_structure "$src_main_java" "$src_test_java" "$package_path"
+      ;;
+    "microservice")
+      # Microservice: Service-focused with resilience patterns
+      create_microservice_structure "$src_main_java" "$src_test_java" "$package_path"
+      ;;
+    "monolith")
+      # Monolith: Traditional layered architecture
+      create_monolith_structure "$src_main_java" "$src_test_java" "$package_path"
+      ;;
+    "eda-kafka")
+      # EDA-Kafka: Event-driven with Kafka integration
+      create_eda_kafka_structure "$src_main_java" "$src_test_java" "$package_path"
+      ;;
+    *)
+      log_error "Unknown architecture: $arch"
       return 1
-    }
+      ;;
+  esac
+
+  log_success "$arch package structure created successfully"
+}
+
+create_modulith_structure() {
+  local src_main_java="$1" src_test_java="$2" package_path="$3"
+
+  # Shared kernel
+  local shared_packages=("config" "exception" "util" "model/shared" "dto/shared")
+  for pkg in "${shared_packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg"
+    mkdir -p "$src_test_java/$package_path/$pkg"
   done
 
-  # Create test package structure mirroring main
-  for pkg in "${packages[@]}"; do
-    mkdir -p "$src_test_java/$package_path/$pkg" || {
-      log_error "Failed to create test package: $pkg"
-      return 1
-    }
+  # Bounded contexts
+  local contexts=("user" "order" "inventory")
+  for context in "${contexts[@]}"; do
+    local context_packages=("controller" "service" "repository" "model" "dto" "event")
+    for pkg in "${context_packages[@]}"; do
+      mkdir -p "$src_main_java/$package_path/$context/$pkg"
+      mkdir -p "$src_test_java/$package_path/$context/$pkg"
+    done
   done
 
-  log_success "Package structure created successfully"
+  # Modulith specific packages
+  mkdir -p "$src_main_java/$package_path/modulith"
+}
+
+create_microservice_structure() {
+  local src_main_java="$1" src_test_java="$2" package_path="$3"
+
+  # Core microservice packages
+  local packages=("config" "controller" "service" "repository" "model" "dto" "exception" "util" "client")
+  for pkg in "${packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg"
+    mkdir -p "$src_test_java/$package_path/$pkg"
+  done
+
+  # Microservice specific packages
+  mkdir -p "$src_main_java/$package_path/resilience"
+  mkdir -p "$src_main_java/$package_path/health"
+  mkdir -p "$src_test_java/$package_path/resilience"
+  mkdir -p "$src_test_java/$package_path/health"
+}
+
+create_monolith_structure() {
+  local src_main_java="$1" src_test_java="$2" package_path="$3"
+
+  # Traditional layered architecture
+  local packages=("config" "controller" "service" "repository" "model" "dto" "exception" "util" "aspect" "scheduler")
+  for pkg in "${packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg"
+    mkdir -p "$src_test_java/$package_path/$pkg"
+  done
+
+  # Domain packages for complex business logic
+  mkdir -p "$src_main_java/$package_path/domain"
+  mkdir -p "$src_test_java/$package_path/domain"
+}
+
+create_eda_kafka_structure() {
+  local src_main_java="$1" src_test_java="$2" package_path="$3"
+
+  # Base packages
+  local packages=("config" "exception" "util" "model" "dto")
+  for pkg in "${packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg"
+    mkdir -p "$src_test_java/$package_path/$pkg"
+  done
+
+  # Event-driven specific packages
+  local event_packages=("event" "producer" "consumer" "handler" "stream")
+  for pkg in "${event_packages[@]}"; do
+    mkdir -p "$src_main_java/$package_path/$pkg"
+    mkdir -p "$src_test_java/$package_path/$pkg"
+  done
+
+  # Kafka configuration packages
+  mkdir -p "$src_main_java/$package_path/config/kafka"
+  mkdir -p "$src_test_java/$package_path/config/kafka"
 }
 
 create_main_application_class() {
-  local project_dir="$1" package_path="$2" app_name="$3"
+  local project_dir="$1" package_path="$2" app_name="$3" arch="$4"
   local app_class_file="$project_dir/src/main/java/$package_path/Application.java"
 
-  log_info "Creating main Application class..."
+  log_info "Creating main Application class for $arch..."
+
+  case "$arch" in
+    "modulith")
+      create_modulith_application_class "$app_class_file" "$package_path" "$app_name"
+      ;;
+    "microservice")
+      create_microservice_application_class "$app_class_file" "$package_path" "$app_name"
+      ;;
+    "monolith")
+      create_monolith_application_class "$app_class_file" "$package_path" "$app_name"
+      ;;
+    "eda-kafka")
+      create_eda_kafka_application_class "$app_class_file" "$package_path" "$app_name"
+      ;;
+  esac
+
+  log_success "Main Application class created for $arch"
+}
+
+create_modulith_application_class() {
+  local app_class_file="$1" package_path="$2" app_name="$3"
 
   cat > "$app_class_file" << EOF
 package ${package_path//"/"/"."};
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.modulith.Modulith;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
- * Main Spring Boot Application class.
+ * Main Spring Boot Application class for Modulith architecture.
  *
  * This is the entry point for the $app_name application.
- * Configured with enterprise features including async processing.
+ * Uses Spring Modulith for domain-driven modular monolith architecture.
  */
 @SpringBootApplication
+@Modulith
 @EnableAsync
 public class Application {
 
@@ -1842,15 +1949,119 @@ public class Application {
     }
 }
 EOF
+}
 
-  log_success "Main Application class created"
+create_microservice_application_class() {
+  local app_class_file="$1" package_path="$2" app_name="$3"
+
+  cat > "$app_class_file" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.scheduling.annotation.EnableAsync;
+
+/**
+ * Main Spring Boot Application class for Microservice architecture.
+ *
+ * This is the entry point for the $app_name microservice.
+ * Configured with service discovery and resilience patterns.
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableAsync
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_monolith_application_class() {
+  local app_class_file="$1" package_path="$2" app_name="$3"
+
+  cat > "$app_class_file" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+/**
+ * Main Spring Boot Application class for Monolith architecture.
+ *
+ * This is the entry point for the $app_name monolithic application.
+ * Configured with async processing and scheduled tasks.
+ */
+@SpringBootApplication
+@EnableAsync
+@EnableScheduling
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_eda_kafka_application_class() {
+  local app_class_file="$1" package_path="$2" app_name="$3"
+
+  cat > "$app_class_file" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.kafka.annotation.EnableKafkaStreams;
+import org.springframework.scheduling.annotation.EnableAsync;
+
+/**
+ * Main Spring Boot Application class for EDA-Kafka architecture.
+ *
+ * This is the entry point for the $app_name event-driven application.
+ * Configured with Kafka Streams and async processing for event handling.
+ */
+@SpringBootApplication
+@EnableKafkaStreams
+@EnableAsync
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
 }
 
 create_security_config() {
+  local project_dir="$1" package_path="$2" arch="$3"
+
+  case "$arch" in
+    "modulith")
+      create_modulith_security_config "$project_dir" "$package_path"
+      ;;
+    "microservice")
+      create_microservice_security_config "$project_dir" "$package_path"
+      ;;
+    "monolith")
+      create_monolith_security_config "$project_dir" "$package_path"
+      ;;
+    "eda-kafka")
+      create_eda_kafka_security_config "$project_dir" "$package_path"
+      ;;
+  esac
+}
+
+create_modulith_security_config() {
   local project_dir="$1" package_path="$2"
   local security_config_file="$project_dir/src/main/java/$package_path/config/SecurityConfig.java"
 
-  log_info "Creating Security configuration..."
+  log_info "Creating Modulith Security configuration..."
 
   cat > "$security_config_file" << EOF
 package ${package_path//"/"/"."}.config;
@@ -1870,10 +2081,10 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Spring Security configuration for the application.
+ * Spring Security configuration for Modulith architecture.
  *
- * Configured with method-level security and basic authentication.
- * In production, replace with proper authentication provider.
+ * Configured with method-level security and role-based access control
+ * for multiple bounded contexts.
  */
 @Configuration
 @EnableWebSecurity
@@ -1883,9 +2094,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable) // For stateless APIs
+            .csrf(AbstractHttpConfigurer::disable) // For API-first design
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**", "/actuator/health", "/actuator/prometheus").permitAll()
+                .requestMatchers("/api/v1/auth/**", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/users/**").hasAnyRole("ADMIN", "USER")
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> {});
@@ -1895,19 +2108,19 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        UserDetails user = User.builder()
+        UserDetails admin = User.builder()
             .username("admin")
             .password(passwordEncoder().encode("admin123"))
-            .roles("ADMIN")
+            .roles("ADMIN", "USER")
             .build();
 
-        UserDetails apiUser = User.builder()
-            .username("api")
-            .password(passwordEncoder().encode("api123"))
-            .roles("API")
+        UserDetails user = User.builder()
+            .username("user")
+            .password(passwordEncoder().encode("user123"))
+            .roles("USER")
             .build();
 
-        return new InMemoryUserDetailsManager(user, apiUser);
+        return new InMemoryUserDetailsManager(admin, user);
     }
 
     @Bean
@@ -1917,7 +2130,234 @@ public class SecurityConfig {
 }
 EOF
 
-  log_success "Security configuration created"
+  log_success "Modulith Security configuration created"
+}
+
+create_microservice_security_config() {
+  local project_dir="$1" package_path="$2"
+  local security_config_file="$project_dir/src/main/java/$package_path/config/SecurityConfig.java"
+
+  log_info "Creating Microservice Security configuration..."
+
+  cat > "$security_config_file" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Spring Security configuration for Microservice architecture.
+ *
+ * Configured with JWT-based authentication for microservice communication.
+ * Assumes OAuth2/JWT tokens from an authorization server.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable) // Microservices typically use stateless APIs
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return jwtAuthenticationConverter;
+    }
+}
+EOF
+
+  log_success "Microservice Security configuration created"
+}
+
+create_monolith_security_config() {
+  local project_dir="$1" package_path="$2"
+  local security_config_file="$project_dir/src/main/java/$package_path/config/SecurityConfig.java"
+
+  log_info "Creating Monolith Security configuration..."
+
+  cat > "$security_config_file" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Spring Security configuration for Monolith architecture.
+ *
+ * Configured with comprehensive security for traditional layered application.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable) // For API-first design
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/", "/login", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/api/v1/auth/**", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().authenticated()
+            )
+            .formLogin(form -> form
+                .loginPage("/login")
+                .defaultSuccessUrl("/dashboard")
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutSuccessUrl("/")
+                .permitAll()
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        UserDetails admin = User.builder()
+            .username("admin")
+            .password(passwordEncoder().encode("admin123"))
+            .roles("ADMIN", "USER")
+            .build();
+
+        UserDetails user = User.builder()
+            .username("user")
+            .password(passwordEncoder().encode("user123"))
+            .roles("USER")
+            .build();
+
+        return new InMemoryUserDetailsManager(admin, user);
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+EOF
+
+  log_success "Monolith Security configuration created"
+}
+
+create_eda_kafka_security_config() {
+  local project_dir="$1" package_path="$2"
+  local security_config_file="$project_dir/src/main/java/$package_path/config/SecurityConfig.java"
+
+  log_info "Creating EDA-Kafka Security configuration..."
+
+  cat > "$security_config_file" << EOF
+package ${package_path//"/"/"."}.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Spring Security configuration for EDA-Kafka architecture.
+ *
+ * Configured for event-driven applications with API key authentication
+ * for event producers/consumers.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable) // Event APIs are typically stateless
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api/v1/events/**").hasRole("PRODUCER")
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
+            )
+            .httpBasic(basic -> {});
+
+        return http.build();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        UserDetails admin = User.builder()
+            .username("admin")
+            .password(passwordEncoder().encode("admin123"))
+            .roles("ADMIN", "PRODUCER", "CONSUMER")
+            .build();
+
+        UserDetails producer = User.builder()
+            .username("producer")
+            .password(passwordEncoder().encode("producer123"))
+            .roles("PRODUCER")
+            .build();
+
+        UserDetails consumer = User.builder()
+            .username("consumer")
+            .password(passwordEncoder().encode("consumer123"))
+            .roles("CONSUMER")
+            .build();
+
+        return new InMemoryUserDetailsManager(admin, producer, consumer);
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+EOF
+
+  log_success "EDA-Kafka Security configuration created"
 }
 
 create_global_exception_handler() {
@@ -2052,14 +2492,104 @@ EOF
   log_success "Resource Not Found Exception created"
 }
 
-create_sample_entity() {
-  local project_dir="$1" package_path="$2"
-  local entity_file="$project_dir/src/main/java/$package_path/model/User.java"
+create_architecture_specific_classes() {
+  local project_dir="$1" package_path="$2" arch="$3"
 
-  log_info "Creating sample User entity..."
+  case "$arch" in
+    "modulith")
+      create_modulith_classes "$project_dir" "$package_path"
+      ;;
+    "microservice")
+      create_microservice_classes "$project_dir" "$package_path"
+      ;;
+    "monolith")
+      create_monolith_classes "$project_dir" "$package_path"
+      ;;
+    "eda-kafka")
+      create_eda_kafka_classes "$project_dir" "$package_path"
+      ;;
+  esac
+}
+
+create_modulith_classes() {
+  local project_dir="$1" package_path="$2"
+
+  # Create shared entities and DTOs
+  create_shared_user_entity "$project_dir" "$package_path"
+  create_shared_user_dtos "$project_dir" "$package_path"
+
+  # Create bounded context classes
+  create_user_context_classes "$project_dir" "$package_path/user"
+  create_order_context_classes "$project_dir" "$package_path/order"
+  create_inventory_context_classes "$project_dir" "$package_path/inventory"
+
+  # Create shared service
+  create_shared_service "$project_dir" "$package_path"
+
+  log_success "Modulith classes created"
+}
+
+create_microservice_classes() {
+  local project_dir="$1" package_path="$2"
+
+  # Microservice has simpler structure - focused on user service
+  create_sample_entity "$project_dir" "$package_path"
+  create_sample_repository "$project_dir" "$package_path"
+  create_sample_service "$project_dir" "$package_path"
+  create_sample_controller "$project_dir" "$package_path"
+  create_sample_dtos "$project_dir" "$package_path"
+
+  # Add microservice-specific classes
+  create_client_config "$project_dir" "$package_path"
+  create_resilience_config "$project_dir" "$package_path"
+
+  log_success "Microservice classes created"
+}
+
+create_monolith_classes() {
+  local project_dir="$1" package_path="$2"
+
+  # Traditional layered architecture
+  create_sample_entity "$project_dir" "$package_path"
+  create_sample_repository "$project_dir" "$package_path"
+  create_sample_service "$project_dir" "$package_path"
+  create_sample_controller "$project_dir" "$package_path"
+  create_sample_dtos "$project_dir" "$package_path"
+
+  # Add domain layer for complex business logic
+  create_domain_service "$project_dir" "$package_path"
+
+  # Add scheduler for batch operations
+  create_scheduler_config "$project_dir" "$package_path"
+
+  log_success "Monolith classes created"
+}
+
+create_eda_kafka_classes() {
+  local project_dir="$1" package_path="$2"
+
+  # Create three microservices: producer-srv, consumer-srv, user-srv
+  create_producer_service "$project_dir" "$package_path"
+  create_consumer_service "$project_dir" "$package_path"
+  create_user_service "$project_dir" "$package_path"
+
+  # Create shared entities and DTOs
+  create_shared_entities "$project_dir" "$package_path"
+
+  # Create Docker Compose with all three services
+  create_eda_docker_compose "$project_dir"
+
+  log_success "EDA-Kafka microservices created"
+}
+
+create_shared_user_entity() {
+  local project_dir="$1" package_path="$2"
+  local entity_file="$project_dir/src/main/java/$package_path/model/shared/User.java"
+
+  log_info "Creating shared User entity..."
 
   cat > "$entity_file" << EOF
-package ${package_path//"/"/"."}.model;
+package ${package_path//"/"/"."}.model.shared;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
@@ -2076,7 +2606,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 /**
- * User entity representing a system user.
+ * Shared User entity for Modulith architecture.
+ * Used across multiple bounded contexts.
  */
 @Entity
 @Table(name = "users")
@@ -2120,491 +2651,2008 @@ public class User {
     private LocalDateTime updatedAt;
 }
 EOF
-
-  log_success "Sample User entity created"
 }
 
-create_sample_repository() {
-  local project_dir="$1" package_path="$2"
-  local repository_file="$project_dir/src/main/java/$package_path/repository/UserRepository.java"
-
-  log_info "Creating User Repository..."
-
-  cat > "$repository_file" << EOF
-package ${package_path//"/"/"."}.repository;
-
-import ${package_path//"/"/"."}.model.User;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
-
-/**
- * Repository interface for User entity operations.
- */
-@Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-
-    /**
-     * Find user by username.
-     * @param username the username to search for
-     * @return Optional containing the user if found
-     */
-    Optional<User> findByUsername(String username);
-
-    /**
-     * Find user by email.
-     * @param email the email to search for
-     * @return Optional containing the user if found
-     */
-    Optional<User> findByEmail(String email);
-
-    /**
-     * Find users by first name or last name.
-     * @param firstName the first name to search for
-     * @param lastName the last name to search for
-     * @return List of users matching the criteria
-     */
-    @Query("SELECT u FROM User u WHERE u.firstName LIKE %:name% OR u.lastName LIKE %:name%")
-    List<User> findByNameContaining(@Param("name") String name);
-
-    /**
-     * Check if username exists.
-     * @param username the username to check
-     * @return true if username exists, false otherwise
-     */
-    boolean existsByUsername(String username);
-
-    /**
-     * Check if email exists.
-     * @param email the email to check
-     * @return true if email exists, false otherwise
-     */
-    boolean existsByEmail(String email);
-}
-EOF
-
-  log_success "User Repository created"
-}
-
-create_sample_service() {
-  local project_dir="$1" package_path="$2"
-  local service_file="$project_dir/src/main/java/$package_path/service/UserService.java"
-
-  log_info "Creating User Service..."
-
-  cat > "$service_file" << EOF
-package ${package_path//"/"/"."}.service;
-
-import ${package_path//"/"/"."}.exception.ResourceNotFoundException;
-import ${package_path//"/"/"."}.model.User;
-import ${package_path//"/"/"."}.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-
-/**
- * Service class for User business logic.
- */
-@Service
-@RequiredArgsConstructor
-@Slf4j
-@Transactional(readOnly = true)
-public class UserService {
-
-    private final UserRepository userRepository;
-
-    /**
-     * Find all users.
-     * @return List of all users
-     */
-    @Cacheable(value = "users")
-    public List<User> findAll() {
-        log.info("Fetching all users");
-        return userRepository.findAll();
-    }
-
-    /**
-     * Find user by ID.
-     * @param id the user ID
-     * @return the user
-     * @throws ResourceNotFoundException if user not found
-     */
-    @Cacheable(value = "user", key = "#id")
-    public User findById(Long id) {
-        log.info("Fetching user with ID: {}", id);
-        return userRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-    }
-
-    /**
-     * Find user by username.
-     * @param username the username
-     * @return Optional containing the user if found
-     */
-    public Optional<User> findByUsername(String username) {
-        log.info("Fetching user with username: {}", username);
-        return userRepository.findByUsername(username);
-    }
-
-    /**
-     * Create a new user.
-     * @param user the user to create
-     * @return the created user
-     */
-    @Transactional
-    @CacheEvict(value = {"users", "user"}, allEntries = true)
-    public User createUser(User user) {
-        log.info("Creating user with username: {}", user.getUsername());
-
-        if (userRepository.existsByUsername(user.getUsername())) {
-            throw new IllegalArgumentException("Username already exists: " + user.getUsername());
-        }
-
-        if (userRepository.existsByEmail(user.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + user.getEmail());
-        }
-
-        User savedUser = userRepository.save(user);
-        log.info("Successfully created user with ID: {}", savedUser.getId());
-        return savedUser;
-    }
-
-    /**
-     * Update an existing user.
-     * @param id the user ID
-     * @param userDetails the updated user details
-     * @return the updated user
-     */
-    @Transactional
-    @CacheEvict(value = {"users", "user"}, key = "#id")
-    public User updateUser(Long id, User userDetails) {
-        log.info("Updating user with ID: {}", id);
-
-        User user = findById(id);
-
-        // Check if username is being changed and if it's already taken
-        if (!user.getUsername().equals(userDetails.getUsername()) &&
-            userRepository.existsByUsername(userDetails.getUsername())) {
-            throw new IllegalArgumentException("Username already exists: " + userDetails.getUsername());
-        }
-
-        // Check if email is being changed and if it's already taken
-        if (!user.getEmail().equals(userDetails.getEmail()) &&
-            userRepository.existsByEmail(userDetails.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + userDetails.getEmail());
-        }
-
-        user.setUsername(userDetails.getUsername());
-        user.setEmail(userDetails.getEmail());
-        user.setFirstName(userDetails.getFirstName());
-        user.setLastName(userDetails.getLastName());
-
-        User updatedUser = userRepository.save(user);
-        log.info("Successfully updated user with ID: {}", updatedUser.getId());
-        return updatedUser;
-    }
-
-    /**
-     * Delete a user by ID.
-     * @param id the user ID
-     */
-    @Transactional
-    @CacheEvict(value = {"users", "user"}, key = "#id")
-    public void deleteUser(Long id) {
-        log.info("Deleting user with ID: {}", id);
-        User user = findById(id);
-        userRepository.delete(user);
-        log.info("Successfully deleted user with ID: {}", id);
-    }
-
-    /**
-     * Search users by name.
-     * @param name the name to search for
-     * @return List of users matching the search criteria
-     */
-    public List<User> searchByName(String name) {
-        log.info("Searching users by name: {}", name);
-        return userRepository.findByNameContaining(name);
-    }
-}
-EOF
-
-  log_success "User Service created"
-}
-
-create_sample_controller() {
-  local project_dir="$1" package_path="$2"
-  local controller_file="$project_dir/src/main/java/$package_path/controller/UserController.java"
-
-  log_info "Creating User Controller..."
-
-  cat > "$controller_file" << EOF
-package ${package_path//"/"/"."}.controller;
-
-import ${package_path//"/"/"."}.dto.CreateUserRequest;
-import ${package_path//"/"/"."}.dto.UpdateUserRequest;
-import ${package_path//"/"/"."}.dto.UserResponse;
-import ${package_path//"/"/"."}.model.User;
-import ${package_path//"/"/"."}.service.UserService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
-/**
- * REST Controller for User management operations.
- */
-@RestController
-@RequestMapping("/api/v1/users")
-@RequiredArgsConstructor
-@Slf4j
-@Tag(name = "User Management", description = "APIs for managing users")
-public class UserController {
-
-    private final UserService userService;
-
-    /**
-     * Get all users.
-     * @return List of all users
-     */
-    @GetMapping
-    @Operation(summary = "Get all users", description = "Retrieves a list of all users")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        log.info("REST request to get all users");
-        List<User> users = userService.findAll();
-        List<UserResponse> responses = users.stream()
-            .map(this::convertToResponse)
-            .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
-    }
-
-    /**
-     * Get user by ID.
-     * @param id the user ID
-     * @return the user
-     */
-    @GetMapping("/{id}")
-    @Operation(summary = "Get user by ID", description = "Retrieves a specific user by their ID")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('API')")
-    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
-        log.info("REST request to get user with ID: {}", id);
-        User user = userService.findById(id);
-        return ResponseEntity.ok(convertToResponse(user));
-    }
-
-    /**
-     * Create a new user.
-     * @param request the user creation request
-     * @return the created user
-     */
-    @PostMapping
-    @Operation(summary = "Create user", description = "Creates a new user")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
-        log.info("REST request to create user: {}", request.getUsername());
-        User user = convertToEntity(request);
-        User savedUser = userService.createUser(user);
-        return ResponseEntity.status(HttpStatus.CREATED).body(convertToResponse(savedUser));
-    }
-
-    /**
-     * Update an existing user.
-     * @param id the user ID
-     * @param request the user update request
-     * @return the updated user
-     */
-    @PutMapping("/{id}")
-    @Operation(summary = "Update user", description = "Updates an existing user")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> updateUser(@PathVariable Long id,
-                                                  @Valid @RequestBody UpdateUserRequest request) {
-        log.info("REST request to update user with ID: {}", id);
-        User user = convertToEntity(request);
-        User updatedUser = userService.updateUser(id, user);
-        return ResponseEntity.ok(convertToResponse(updatedUser));
-    }
-
-    /**
-     * Delete a user.
-     * @param id the user ID
-     * @return no content response
-     */
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Delete user", description = "Deletes a user by ID")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        log.info("REST request to delete user with ID: {}", id);
-        userService.deleteUser(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Search users by name.
-     * @param name the search term
-     * @return list of matching users
-     */
-    @GetMapping("/search")
-    @Operation(summary = "Search users", description = "Search users by name")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('API')")
-    public ResponseEntity<List<UserResponse>> searchUsers(@RequestParam String name) {
-        log.info("REST request to search users by name: {}", name);
-        List<User> users = userService.searchByName(name);
-        List<UserResponse> responses = users.stream()
-            .map(this::convertToResponse)
-            .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
-    }
-
-    private UserResponse convertToResponse(User user) {
-        return UserResponse.builder()
-            .id(user.getId())
-            .username(user.getUsername())
-            .email(user.getEmail())
-            .firstName(user.getFirstName())
-            .lastName(user.getLastName())
-            .createdAt(user.getCreatedAt())
-            .updatedAt(user.getUpdatedAt())
-            .build();
-    }
-
-    private User convertToEntity(CreateUserRequest request) {
-        return User.builder()
-            .username(request.getUsername())
-            .email(request.getEmail())
-            .firstName(request.getFirstName())
-            .lastName(request.getLastName())
-            .build();
-    }
-
-    private User convertToEntity(UpdateUserRequest request) {
-        return User.builder()
-            .username(request.getUsername())
-            .email(request.getEmail())
-            .firstName(request.getFirstName())
-            .lastName(request.getLastName())
-            .build();
-    }
-}
-EOF
-
-  log_success "User Controller created"
-}
-
-create_sample_dtos() {
+create_event_classes() {
   local project_dir="$1" package_path="$2"
 
-  # Create UserResponse DTO
-  cat > "$project_dir/src/main/java/$package_path/dto/UserResponse.java" << EOF
-package ${package_path//"/"/"."}.dto;
+  # UserCreatedEvent
+  cat > "$project_dir/src/main/java/$package_path/event/UserCreatedEvent.java" << EOF
+package ${package_path//"/"/"."}.event;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 /**
- * User Response DTO.
+ * Event representing user creation.
  */
 @Data
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UserResponse {
-    private Long id;
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserCreatedEvent {
+    private Long userId;
     private String username;
     private String email;
-    private String firstName;
-    private String lastName;
     private LocalDateTime createdAt;
+}
+EOF
+
+  # UserUpdatedEvent
+  cat > "$project_dir/src/main/java/$package_path/event/UserUpdatedEvent.java" << EOF
+package ${package_path//"/"/"."}.event;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+/**
+ * Event representing user updates.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserUpdatedEvent {
+    private Long userId;
+    private String oldUsername;
+    private String newUsername;
+    private String oldEmail;
+    private String newEmail;
     private LocalDateTime updatedAt;
 }
 EOF
+}
 
-  # Create CreateUserRequest DTO
-  cat > "$project_dir/src/main/java/$package_path/dto/CreateUserRequest.java" << EOF
-package ${package_path//"/"/"."}.dto;
+create_producer_classes() {
+  local project_dir="$1" package_path="$2"
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
+  cat > "$project_dir/src/main/java/$package_path/producer/UserEventProducer.java" << EOF
+package ${package_path//"/"/"."}.producer;
+
+import ${package_path//"/"/"."}.event.UserCreatedEvent;
+import ${package_path//"/"/"."}.event.UserUpdatedEvent;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
 
 /**
- * Create User Request DTO.
+ * Producer for user-related events.
  */
-@Data
-public class CreateUserRequest {
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class UserEventProducer {
 
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-    private String username;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    @Email(message = "Email should be valid")
-    @NotBlank(message = "Email is required")
-    private String email;
+    private static final String USER_EVENTS_TOPIC = "user-events";
 
-    @NotBlank(message = "First name is required")
-    @Size(max = 50, message = "First name cannot exceed 50 characters")
-    private String firstName;
+    /**
+     * Publish user created event.
+     */
+    public void publishUserCreated(UserCreatedEvent event) {
+        log.info("Publishing user created event: {}", event);
+        kafkaTemplate.send(USER_EVENTS_TOPIC, event.getUserId().toString(), event);
+    }
 
-    @NotBlank(message = "Last name is required")
-    @Size(max = 50, message = "Last name cannot exceed 50 characters")
-    private String lastName;
+    /**
+     * Publish user updated event.
+     */
+    public void publishUserUpdated(UserUpdatedEvent event) {
+        log.info("Publishing user updated event: {}", event);
+        kafkaTemplate.send(USER_EVENTS_TOPIC, event.getUserId().toString(), event);
+    }
 }
 EOF
+}
 
-  # Create UpdateUserRequest DTO
-  cat > "$project_dir/src/main/java/$package_path/dto/UpdateUserRequest.java" << EOF
-package ${package_path//"/"/"."}.dto;
+create_consumer_classes() {
+  local project_dir="$1" package_path="$2"
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
+  cat > "$project_dir/src/main/java/$package_path/consumer/UserEventConsumer.java" << EOF
+package ${package_path//"/"/"."}.consumer;
+
+import ${package_path//"/"/"."}.event.UserCreatedEvent;
+import ${package_path//"/"/"."}.event.UserUpdatedEvent;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
 
 /**
- * Update User Request DTO.
+ * Consumer for user-related events.
  */
-@Data
-public class UpdateUserRequest {
+@Component
+@Slf4j
+public class UserEventConsumer {
 
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-    private String username;
+    @KafkaListener(topics = "user-events", groupId = "user-event-processor")
+    public void handleUserEvent(Object event) {
+        log.info("Received user event: {}", event);
 
-    @Email(message = "Email should be valid")
-    @NotBlank(message = "Email is required")
-    private String email;
+        if (event instanceof UserCreatedEvent) {
+            handleUserCreated((UserCreatedEvent) event);
+        } else if (event instanceof UserUpdatedEvent) {
+            handleUserUpdated((UserUpdatedEvent) event);
+        } else {
+            log.warn("Unknown event type: {}", event.getClass());
+        }
+    }
 
-    @NotBlank(message = "First name is required")
-    @Size(max = 50, message = "First name cannot exceed 50 characters")
-    private String firstName;
+    private void handleUserCreated(UserCreatedEvent event) {
+        log.info("Processing user created: {}", event.getUsername());
+        // Implement business logic for user creation events
+    }
 
-    @NotBlank(message = "Last name is required")
-    @Size(max = 50, message = "Last name cannot exceed 50 characters")
-    private String lastName;
+    private void handleUserUpdated(UserUpdatedEvent event) {
+        log.info("Processing user updated: {}", event.getNewUsername());
+        // Implement business logic for user update events
+    }
 }
 EOF
+}
 
-  log_success "User DTOs created"
+create_producer_service() {
+  local project_dir="$1" package_path="$2"
+  local producer_dir="$project_dir/producer-srv"
+
+  # Create producer service directory structure
+  mkdir -p "$producer_dir/src/main/java/$package_path"
+  mkdir -p "$producer_dir/src/main/resources"
+  mkdir -p "$producer_dir/src/test/java/$package_path"
+
+  # Create producer service pom.xml
+  create_producer_pom "$producer_dir" "$package_path"
+
+  # Create producer service application.yml
+  create_producer_application_yml "$producer_dir"
+
+  # Create producer service classes
+  create_producer_application_class "$producer_dir" "$package_path"
+  create_producer_security_config "$producer_dir" "$package_path"
+  create_producer_controller "$producer_dir" "$package_path"
+  create_producer_service_class "$producer_dir" "$package_path"
+  create_producer_config "$producer_dir" "$package_path"
+
+  log_info "Producer service created"
+}
+
+create_consumer_service() {
+  local project_dir="$1" package_path="$2"
+  local consumer_dir="$project_dir/consumer-srv"
+
+  # Create consumer service directory structure
+  mkdir -p "$consumer_dir/src/main/java/$package_path"
+  mkdir -p "$consumer_dir/src/main/resources"
+  mkdir -p "$consumer_dir/src/test/java/$package_path"
+
+  # Create consumer service pom.xml
+  create_consumer_pom "$consumer_dir" "$package_path"
+
+  # Create consumer service application.yml
+  create_consumer_application_yml "$consumer_dir"
+
+  # Create consumer service classes
+  create_consumer_application_class "$consumer_dir" "$package_path"
+  create_consumer_security_config "$consumer_dir" "$package_path"
+  create_consumer_listener "$consumer_dir" "$package_path"
+  create_consumer_service_class "$consumer_dir" "$package_path"
+  create_consumer_config "$consumer_dir" "$package_path"
+
+  log_info "Consumer service created"
+}
+
+create_user_service() {
+  local project_dir="$1" package_path="$2"
+  local user_dir="$project_dir/user-srv"
+
+  # Create user service directory structure
+  mkdir -p "$user_dir/src/main/java/$package_path"
+  mkdir -p "$user_dir/src/main/resources"
+  mkdir -p "$user_dir/src/test/java/$package_path"
+
+  # Create user service pom.xml
+  create_user_pom "$user_dir" "$package_path"
+
+  # Create user service application.yml
+  create_user_application_yml "$user_dir"
+
+  # Create user service classes
+  create_user_application_class "$user_dir" "$package_path"
+  create_user_auth_controller "$user_dir" "$package_path"
+  create_user_service_class "$user_dir" "$package_path"
+  create_jwt_utils "$user_dir" "$package_path"
+  create_user_model "$user_dir" "$package_path"
+
+  log_info "User service created"
+}
+
+create_shared_entities() {
+  local project_dir="$1" package_path="$2"
+  local shared_dir="$project_dir/shared"
+
+  # Create shared module for common entities
+  mkdir -p "$shared_dir/src/main/java/$package_path/shared"
+  mkdir -p "$shared_dir/src/main/resources"
+
+  # Create shared pom.xml
+  create_shared_pom "$shared_dir" "$package_path"
+
+  # Create shared entities
+  create_shared_user_entity "$shared_dir" "$package_path"
+  create_shared_role_entity "$shared_dir" "$package_path"
+  create_shared_message_entity "$shared_dir" "$package_path"
+  create_shared_topic_entity "$shared_dir" "$package_path"
+
+  log_info "Shared entities created"
+}
+
+create_kafka_config() {
+  local project_dir="$1" package_path="$2"
+  local kafka_config_file="$project_dir/src/main/java/$package_path/config/kafka/KafkaConfig.java"
+
+  cat > "$kafka_config_file" << EOF
+package ${package_path//"/"/"."}.config.kafka;
+
+import org.apache.kafka.clients.admin.NewTopic;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.TopicBuilder;
+
+/**
+ * Kafka configuration for event-driven architecture.
+ */
+@Configuration
+public class KafkaConfig {
+
+    @Bean
+    public NewTopic userEventsTopic() {
+        return TopicBuilder.name("user-events")
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic messageEventsTopic() {
+        return TopicBuilder.name("message-events")
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+
+    @Bean
+    public NewTopic deadLetterTopic() {
+        return TopicBuilder.name("dead-letter-topic")
+            .partitions(1)
+            .replicas(1)
+            .build();
+    }
+}
+EOF
+}
+
+create_producer_pom() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/pom.xml" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>${package_path//"/"/"."}</groupId>
+    <artifactId>producer-srv</artifactId>
+    <version>0.0.1</version>
+    <name>producer-srv</name>
+    <description>Kafka Message Producer Service</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-kafka.version>3.2.0</spring-kafka.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Shared module -->
+        <dependency>
+            <groupId>${package_path//"/"/"."}</groupId>
+            <artifactId>shared</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+
+        <!-- Utilities -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+}
+
+create_consumer_pom() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/pom.xml" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>${package_path//"/"/"."}</groupId>
+    <artifactId>consumer-srv</artifactId>
+    <version>0.0.1</version>
+    <name>consumer-srv</name>
+    <description>Kafka Message Consumer Service</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-kafka.version>3.2.0</spring-kafka.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Shared module -->
+        <dependency>
+            <groupId>${package_path//"/"/"."}</groupId>
+            <artifactId>shared</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+
+        <!-- Utilities -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+}
+
+create_user_pom() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/pom.xml" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>${package_path//"/"/"."}</groupId>
+    <artifactId>user-srv</artifactId>
+    <version>0.0.1</version>
+    <name>user-srv</name>
+    <description>JWT Authentication Service</description>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Database -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JWT -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.11.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.11.5</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Shared module -->
+        <dependency>
+            <groupId>${package_path//"/"/"."}</groupId>
+            <artifactId>shared</artifactId>
+            <version>0.0.1</version>
+        </dependency>
+
+        <!-- Utilities -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+}
+
+create_shared_pom() {
+  local shared_dir="$1" package_path="$2"
+
+  cat > "$shared_dir/pom.xml" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>${package_path//"/"/"."}</groupId>
+    <artifactId>shared</artifactId>
+    <version>0.0.1</version>
+    <name>shared</name>
+    <description>Shared entities and DTOs</description>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Utilities -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Jackson for JSON serialization -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+EOF
+}
+
+create_producer_application_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/Application.java" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * Main Spring Boot Application class for Producer Service.
+ *
+ * This service produces messages to Kafka topics.
+ */
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_consumer_application_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/Application.java" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.kafka.annotation.EnableKafka;
+
+/**
+ * Main Spring Boot Application class for Consumer Service.
+ *
+ * This service consumes messages from Kafka topics.
+ */
+@SpringBootApplication
+@EnableKafka
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_user_application_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/Application.java" << EOF
+package ${package_path//"/"/"."};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * Main Spring Boot Application class for User Service.
+ *
+ * This service provides JWT authentication for all services.
+ */
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+EOF
+}
+
+create_producer_application_yml() {
+  local service_dir="$1"
+
+  cat > "$service_dir/src/main/resources/application.yml" << EOF
+server:
+  port: 8081
+
+spring:
+  application:
+    name: producer-service
+  profiles:
+    active: local
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+    template:
+      default-topic: message-events
+
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+EOF
+}
+
+create_consumer_application_yml() {
+  local service_dir="$1"
+
+  cat > "$service_dir/src/main/resources/application.yml" << EOF
+server:
+  port: 8082
+
+spring:
+  application:
+    name: consumer-service
+  profiles:
+    active: local
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: consumer-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    listener:
+      concurrency: 3
+
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+EOF
+}
+
+create_user_application_yml() {
+  local service_dir="$1"
+
+  cat > "$service_dir/src/main/resources/application.yml" << EOF
+server:
+  port: 8080
+
+spring:
+  application:
+    name: user-service
+  profiles:
+    active: local
+
+  datasource:
+    url: jdbc:h2:mem:userdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+jwt:
+  secret: mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
+  expiration: 86400000  # 24 hours in milliseconds
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+EOF
+}
+
+create_shared_role_entity() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/shared/Role.java" << EOF
+package ${package_path//"/"/"."}.shared;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * Role entity for user roles.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Role {
+
+    private Long id;
+    private String name;
+    private String description;
+}
+EOF
+}
+
+create_shared_message_entity() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/shared/Message.java" << EOF
+package ${package_path//"/"/"."}.shared;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+/**
+ * Message entity for Kafka messages.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Message {
+
+    private String id;
+    private String content;
+    private String sender;
+    private String topic;
+    private LocalDateTime timestamp;
+    private MessageType type;
+
+    public enum MessageType {
+        INFO, WARNING, ERROR, DEBUG
+    }
+}
+EOF
+}
+
+create_shared_topic_entity() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/shared/Topic.java" << EOF
+package ${package_path//"/"/"."}.shared;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * Topic entity for Kafka topics.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Topic {
+
+    private String name;
+    private String description;
+    private int partitions;
+    private short replicationFactor;
+}
+EOF
+}
+
+create_producer_security_config() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/config/SecurityConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Security configuration for Producer Service.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api/v1/producer/**").authenticated()
+                .anyRequest().authenticated()
+            );
+
+        return http.build();
+    }
+}
+EOF
+}
+
+create_producer_controller() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/controller/ProducerController.java" << EOF
+package ${package_path//"/"/"."}.controller;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * REST Controller for Kafka Message Producer operations.
+ */
+@RestController
+@RequestMapping("/api/v1/producer")
+@RequiredArgsConstructor
+@Slf4j
+public class ProducerController {
+
+    private final ProducerService producerService;
+
+    /**
+     * Send a simple message to Kafka.
+     */
+    @PostMapping("/send")
+    @PreAuthorize("hasRole('PRODUCER')")
+    public ResponseEntity<Map<String, String>> sendMessage(@RequestBody Message message) {
+        log.info("Received request to send message: {}", message);
+
+        try {
+            producerService.sendMessage(message);
+            return ResponseEntity.ok(Map.of(
+                "status", "success",
+                "message", "Message sent successfully",
+                "messageId", message.getId()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to send message", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "status", "error",
+                "message", "Failed to send message: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Send a test message for demonstration.
+     */
+    @PostMapping("/test")
+    @PreAuthorize("hasRole('PRODUCER')")
+    public ResponseEntity<Map<String, String>> sendTestMessage() {
+        log.info("Sending test message");
+
+        Message testMessage = Message.builder()
+            .id("test-" + System.currentTimeMillis())
+            .content("Hello from Producer Service!")
+            .sender("producer-service")
+            .topic("message-events")
+            .timestamp(java.time.LocalDateTime.now())
+            .type(Message.MessageType.INFO)
+            .build();
+
+        return sendMessage(testMessage);
+    }
+}
+EOF
+}
+
+create_producer_service_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/service/ProducerService.java" << EOF
+package ${package_path//"/"/"."}.service;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+
+/**
+ * Service for producing messages to Kafka topics.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ProducerService {
+
+    private final KafkaTemplate<String, Message> kafkaTemplate;
+
+    /**
+     * Send a message to the default topic.
+     */
+    public void sendMessage(Message message) {
+        log.info("Sending message to Kafka: {}", message);
+
+        try {
+            kafkaTemplate.send("message-events", message.getId(), message);
+            log.info("Message sent successfully with ID: {}", message.getId());
+        } catch (Exception e) {
+            log.error("Failed to send message: {}", message.getId(), e);
+            throw new RuntimeException("Failed to send message to Kafka", e);
+        }
+    }
+
+    /**
+     * Send a message to a specific topic.
+     */
+    public void sendMessageToTopic(String topic, Message message) {
+        log.info("Sending message to topic {}: {}", topic, message);
+
+        try {
+            kafkaTemplate.send(topic, message.getId(), message);
+            log.info("Message sent to topic {} successfully with ID: {}", topic, message.getId());
+        } catch (Exception e) {
+            log.error("Failed to send message to topic {}: {}", topic, message.getId(), e);
+            throw new RuntimeException("Failed to send message to Kafka topic: " + topic, e);
+        }
+    }
+}
+EOF
+}
+
+create_producer_config() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/config/KafkaConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import org.apache.kafka.clients.admin.NewTopic;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.TopicBuilder;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
+
+/**
+ * Kafka configuration for Producer Service.
+ */
+@Configuration
+public class KafkaConfig {
+
+    @Bean
+    public KafkaTemplate<String, Message> kafkaTemplate(ProducerFactory<String, Message> producerFactory) {
+        return new KafkaTemplate<>(producerFactory);
+    }
+
+    @Bean
+    public NewTopic messageEventsTopic() {
+        return TopicBuilder.name("message-events")
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
+}
+EOF
+}
+
+create_consumer_security_config() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/config/SecurityConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Security configuration for Consumer Service.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/api/v1/consumer/**").authenticated()
+                .anyRequest().authenticated()
+            );
+
+        return http.build();
+    }
+}
+EOF
+}
+
+create_consumer_listener() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/listener/MessageEventListener.java" << EOF
+package ${package_path//"/"/"."}.listener;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+
+/**
+ * Kafka message listener for consuming messages.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class MessageEventListener {
+
+    private final ConsumerService consumerService;
+
+    /**
+     * Listen for messages on the message-events topic.
+     */
+    @KafkaListener(topics = "message-events", groupId = "consumer-service-group")
+    public void listenMessageEvents(
+            @Payload Message message,
+            @Header(KafkaHeaders.RECEIVED_KEY) String key,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment acknowledgment) {
+
+        log.info("Received message from topic {}: key={}, message={}", topic, key, message);
+
+        try {
+            consumerService.processMessage(message);
+            acknowledgment.acknowledge();
+            log.info("Message processed successfully: {}", message.getId());
+        } catch (Exception e) {
+            log.error("Failed to process message: {}", message.getId(), e);
+            // In a real application, you might want to send to a dead letter topic
+            acknowledgment.acknowledge();
+        }
+    }
+}
+EOF
+}
+
+create_consumer_service_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/service/ConsumerService.java" << EOF
+package ${package_path//"/"/"."}.service;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+
+/**
+ * Service for processing consumed Kafka messages.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ConsumerService {
+
+    // In-memory storage for demonstration (use a database in production)
+    private final Map<String, Message> processedMessages = new ConcurrentHashMap<>();
+
+    /**
+     * Process a received message.
+     */
+    public void processMessage(Message message) {
+        log.info("Processing message: {}", message);
+
+        // Store the message
+        processedMessages.put(message.getId(), message);
+
+        // Process based on message type
+        switch (message.getType()) {
+            case INFO:
+                handleInfoMessage(message);
+                break;
+            case WARNING:
+                handleWarningMessage(message);
+                break;
+            case ERROR:
+                handleErrorMessage(message);
+                break;
+            case DEBUG:
+                handleDebugMessage(message);
+                break;
+            default:
+                log.warn("Unknown message type: {}", message.getType());
+        }
+
+        log.info("Message processed successfully: {}", message.getId());
+    }
+
+    private void handleInfoMessage(Message message) {
+        log.info("Handling INFO message: {}", message.getContent());
+        // Implement INFO message handling logic
+    }
+
+    private void handleWarningMessage(Message message) {
+        log.warn("Handling WARNING message: {}", message.getContent());
+        // Implement WARNING message handling logic
+    }
+
+    private void handleErrorMessage(Message message) {
+        log.error("Handling ERROR message: {}", message.getContent());
+        // Implement ERROR message handling logic
+    }
+
+    private void handleDebugMessage(Message message) {
+        log.debug("Handling DEBUG message: {}", message.getContent());
+        // Implement DEBUG message handling logic
+    }
+
+    /**
+     * Get all processed messages.
+     */
+    public Map<String, Message> getProcessedMessages() {
+        return new ConcurrentHashMap<>(processedMessages);
+    }
+
+    /**
+     * Get a specific processed message by ID.
+     */
+    public Message getProcessedMessage(String id) {
+        return processedMessages.get(id);
+    }
+}
+EOF
+}
+
+create_consumer_config() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/config/KafkaConfig.java" << EOF
+package ${package_path//"/"/"."}.config;
+
+import ${package_path//"/"/."/../../../../shared/Message.java"};
+import ${package_path//"/"/."/../../../../shared/shared/Message.java"};
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Kafka configuration for Consumer Service.
+ */
+@Configuration
+public class KafkaConfig {
+
+    @Bean
+    public ConsumerFactory<String, Message> consumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumer-service-group");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                 "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                 "org.springframework.kafka.support.serializer.JsonDeserializer");
+        props.put("spring.json.trusted.packages", "*");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Message> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, Message> factory =
+            new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory());
+        return factory;
+    }
+}
+EOF
+}
+
+create_user_auth_controller() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/controller/AuthController.java" << EOF
+package ${package_path//"/"/"."}.controller;
+
+import ${package_path//"/"/."/../../../../shared/User.java"};
+import ${package_path//"/"/."/../../../../shared/shared/User.java"};
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * Authentication controller for JWT token generation.
+ */
+@RestController
+@RequestMapping("/api/v1/auth")
+@RequiredArgsConstructor
+@Slf4j
+public class AuthController {
+
+    private final AuthService authService;
+
+    /**
+     * Login endpoint to get JWT token.
+     */
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, String>> login(@RequestBody LoginRequest loginRequest) {
+        log.info("Login attempt for user: {}", loginRequest.getUsername());
+
+        try {
+            String token = authService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
+            return ResponseEntity.ok(Map.of(
+                "token", token,
+                "type", "Bearer",
+                "expiresIn", "86400000" // 24 hours
+            ));
+        } catch (Exception e) {
+            log.warn("Login failed for user: {}", loginRequest.getUsername());
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Invalid credentials",
+                "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Validate JWT token.
+     */
+    @PostMapping("/validate")
+    public ResponseEntity<Map<String, String>> validateToken(@RequestHeader("Authorization") String token) {
+        log.info("Token validation request");
+
+        try {
+            boolean isValid = authService.validateToken(token.replace("Bearer ", ""));
+            if (isValid) {
+                return ResponseEntity.ok(Map.of("valid", "true"));
+            } else {
+                return ResponseEntity.ok(Map.of("valid", "false"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("valid", "false", "error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get current user info.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<Map<String, Object>> getCurrentUser(@RequestHeader("Authorization") String token) {
+        try {
+            String username = authService.getUsernameFromToken(token.replace("Bearer ", ""));
+            return ResponseEntity.ok(Map.of(
+                "username", username,
+                "service", "user-service"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    public static class LoginRequest {
+        private String username;
+        private String password;
+
+        // getters and setters
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+    }
+}
+EOF
+}
+
+create_user_service_class() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/service/AuthService.java" << EOF
+package ${package_path//"/"/"."}.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+/**
+ * Authentication service for user management and JWT token handling.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AuthService implements UserDetailsService {
+
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtils jwtUtils;
+
+    /**
+     * Authenticate user and return JWT token.
+     */
+    public String authenticate(String username, String password) {
+        // Simple authentication - in production, check against database
+        if ("producer".equals(username) && "producer123".equals(password)) {
+            return jwtUtils.generateToken(username, "PRODUCER");
+        } else if ("consumer".equals(username) && "consumer123".equals(password)) {
+            return jwtUtils.generateToken(username, "CONSUMER");
+        } else if ("admin".equals(username) && "admin123".equals(password)) {
+            return jwtUtils.generateToken(username, "ADMIN");
+        } else {
+            throw new RuntimeException("Invalid credentials");
+        }
+    }
+
+    /**
+     * Validate JWT token.
+     */
+    public boolean validateToken(String token) {
+        return jwtUtils.validateToken(token);
+    }
+
+    /**
+     * Get username from JWT token.
+     */
+    public String getUsernameFromToken(String token) {
+        return jwtUtils.getUsernameFromToken(token);
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // Create users for different services
+        if ("producer".equals(username)) {
+            return User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("producer123"))
+                .roles("PRODUCER")
+                .build();
+        } else if ("consumer".equals(username)) {
+            return User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("consumer123"))
+                .roles("CONSUMER")
+                .build();
+        } else if ("admin".equals(username)) {
+            return User.builder()
+                .username(username)
+                .password(passwordEncoder.encode("admin123"))
+                .roles("ADMIN", "PRODUCER", "CONSUMER")
+                .build();
+        } else {
+            throw new UsernameNotFoundException("User not found: " + username);
+        }
+    }
+}
+EOF
+}
+
+create_jwt_utils() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/util/JwtUtils.java" << EOF
+package ${package_path//"/"/"."}.util;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+
+/**
+ * JWT token utility class for token generation and validation.
+ */
+@Component
+@Slf4j
+public class JwtUtils {
+
+    @Value("\${jwt.secret:mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm}")
+    private String jwtSecret;
+
+    @Value("\${jwt.expiration:86400000}")
+    private long jwtExpirationMs;
+
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    /**
+     * Generate JWT token for user.
+     */
+    public String generateToken(String username, String role) {
+        return Jwts.builder()
+            .setSubject(username)
+            .claim("role", role)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+            .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+            .compact();
+    }
+
+    /**
+     * Get username from JWT token.
+     */
+    public String getUsernameFromToken(String token) {
+        return Jwts.parserBuilder()
+            .setSigningKey(getSigningKey())
+            .build()
+            .parseClaimsJws(token)
+            .getBody()
+            .getSubject();
+    }
+
+    /**
+     * Validate JWT token.
+     */
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token);
+            return true;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT token is expired: {}", e.getMessage());
+        } catch (UnsupportedJwtException e) {
+            log.warn("JWT token is unsupported: {}", e.getMessage());
+        } catch (MalformedJwtException e) {
+            log.warn("Invalid JWT token: {}", e.getMessage());
+        } catch (SignatureException e) {
+            log.warn("Invalid JWT signature: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            log.warn("JWT claims string is empty: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Get role from JWT token.
+     */
+    public String getRoleFromToken(String token) {
+        return Jwts.parserBuilder()
+            .setSigningKey(getSigningKey())
+            .build()
+            .parseClaimsJws(token)
+            .getBody()
+            .get("role", String.class);
+    }
+}
+EOF
+}
+
+create_user_model() {
+  local service_dir="$1" package_path="$2"
+
+  cat > "$service_dir/src/main/java/$package_path/model/User.java" << EOF
+package ${package_path//"/"/"."}.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * User entity for authentication service.
+ */
+@Entity
+@Table(name = "users")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(unique = true, nullable = false)
+    private String username;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(nullable = false)
+    private String role;
+
+    @Column(nullable = false)
+    private boolean enabled = true;
+}
+EOF
+}
+
+create_eda_docker_compose() {
+  local project_dir="$1"
+
+  cat > "$project_dir/docker-compose.yml" << EOF
+version: '3.8'
+
+services:
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: eda-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - eda-network
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: eda-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eda-network
+
+  # User Service (JWT Authentication)
+  user-srv:
+    build:
+      context: ./user-srv
+      dockerfile: ../Dockerfile
+    container_name: eda-user-service
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - JWT_SECRET=mySecretKeyThatShouldBeAtLeast256BitsLongForHS256Algorithm
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - eda-network
+
+  # Producer Service
+  producer-srv:
+    build:
+      context: ./producer-srv
+      dockerfile: ../Dockerfile
+    container_name: eda-producer-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      user-srv:
+        condition: service_started
+    networks:
+      - eda-network
+
+  # Consumer Service
+  consumer-srv:
+    build:
+      context: ./consumer-srv
+      dockerfile: ../Dockerfile
+    container_name: eda-consumer-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      kafka:
+        condition: service_healthy
+      user-srv:
+        condition: service_started
+    networks:
+      - eda-network
+
+networks:
+  eda-network:
+    driver: bridge
+
+volumes:
+  kafka_data:
+    driver: local
+EOF
+
+  # Create a shared Dockerfile for all services
+  cat > "$project_dir/Dockerfile" << EOF
+# Build stage
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:17-jre-alpine AS runtime
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 appgroup && \
+    adduser -u 1001 -G appgroup -s /bin/sh -D appuser
+
+# Copy built application
+COPY --from=build /app/target/*.jar app.jar
+
+# Change ownership and switch to non-root user
+RUN chown appuser:appgroup app.jar
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+EOF
+}
+
+create_domain_service() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/domain/UserDomainService.java" << EOF
+package ${package_path//"/"/"."}.domain;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+/**
+ * Domain service for complex user business logic.
+ * Contains business rules that don't belong to entities or application services.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class UserDomainService {
+
+    // Complex domain logic that spans multiple entities
+}
+EOF
+}
+
+create_scheduler_config() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/scheduler/UserCleanupScheduler.java" << EOF
+package ${package_path//"/"/"."}.scheduler;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * Scheduled tasks for user-related maintenance operations.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class UserCleanupScheduler {
+
+    /**
+     * Clean up inactive users every day at 2 AM.
+     */
+    @Scheduled(cron = "0 0 2 * * ?")
+    public void cleanupInactiveUsers() {
+        log.info("Running scheduled cleanup of inactive users");
+        // Implementation for cleanup logic
+    }
+}
+EOF
+}
+
+create_handler_classes() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/handler/UserEventHandler.java" << EOF
+package ${package_path//"/"/"."}.handler;
+
+import ${package_path//"/"/"."}.event.UserCreatedEvent;
+import ${package_path//"/"/"."}.event.UserUpdatedEvent;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+/**
+ * Event handler for user-related events.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class UserEventHandler {
+
+    public void handleUserCreated(UserCreatedEvent event) {
+        log.info("Handling user created event: {}", event);
+        // Implement event handling logic
+    }
+
+    public void handleUserUpdated(UserUpdatedEvent event) {
+        log.info("Handling user updated event: {}", event);
+        // Implement event handling logic
+    }
+}
+EOF
 }
 
 create_logging_config() {
@@ -3125,7 +5173,7 @@ sboot() {
   esac
 
   # Parse arguments or prompt interactively
-  local ARCH DIR
+  local ARCH DIR GROUP_ID_INPUT
   if [[ $# -lt 2 ]]; then
     echo
     echo -e "${YLW}╔════════════════════════════════════════════════════════╗${CLR}"
@@ -3133,21 +5181,31 @@ sboot() {
     echo -e "${YLW}╚════════════════════════════════════════════════════════╝${CLR}"
     echo
 
-    # Prompt for architecture
-    echo -e "${CYN}Available architectures:${CLR}"
-    echo -e "  ${MAG}modulith${CLR}      - Domain-driven modular monolith"
-    echo -e "  ${MAG}microservice${CLR}  - Standalone microservice"
-    echo -e "  ${MAG}monolith${CLR}      - Traditional layered monolith"
-    echo
+    # Prompt for architecture if not provided
+    if [[ $# -eq 0 ]]; then
+      echo -e "${CYN}Available architectures:${CLR}"
+      echo -e "  ${MAG}modulith${CLR}      - Domain-driven modular monolith"
+      echo -e "  ${MAG}microservice${CLR}  - Standalone microservice"
+      echo -e "  ${MAG}monolith${CLR}      - Traditional layered monolith"
+      echo -e "  ${MAG}eda-kafka${CLR}    - Event-driven architecture with Kafka"
+      echo
 
-    while true; do
-      read -p "Choose architecture (modulith/microservice/monolith): " ARCH
-      if [[ " ${SUPPORTED_ARCHITECTURES[*]} " =~ " ${ARCH} " ]]; then
-        break
-      else
-        echo -e "${RED}Invalid architecture. Please choose from: ${SUPPORTED_ARCHITECTURES[*]}${CLR}"
+      while true; do
+        read -p "Choose architecture (modulith/microservice/monolith/eda-kafka): " ARCH
+        if [[ " ${SUPPORTED_ARCHITECTURES[*]} " =~ " ${ARCH} " ]]; then
+          break
+        else
+          echo -e "${RED}Invalid architecture. Please choose from: ${SUPPORTED_ARCHITECTURES[*]}${CLR}"
+        fi
+      done
+    else
+      ARCH="$1"
+      if [[ ! " ${SUPPORTED_ARCHITECTURES[*]} " =~ " ${ARCH} " ]]; then
+        log_error "Invalid architecture: $ARCH"
+        log_info "Supported architectures: ${SUPPORTED_ARCHITECTURES[*]}"
+        return 1
       fi
-    done
+    fi
 
     # Prompt for project directory
     while true; do
@@ -3167,8 +5225,31 @@ sboot() {
       break
     done
 
+    # Prompt for package name (group ID)
+    echo
+    echo -e "${CYN}Package Configuration:${CLR}"
+    echo -e "${BLU}Leave empty to use default: io.github.codesapienbe.<project-name>${CLR}"
+    while true; do
+      read -p "Enter base package name (e.g., com.example.myapp): " GROUP_ID_INPUT
+      if [[ -z "$GROUP_ID_INPUT" ]]; then
+        # Generate default package name from project directory
+        local clean_project_name
+        clean_project_name=$(echo "$DIR" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | sed 's/^\([a-z0-9]*\).*/\1/')
+        GROUP_ID="io.github.codesapienbe.$clean_project_name"
+        echo -e "${GRN}Using default package: ${MAG}$GROUP_ID${CLR}"
+        break
+      fi
+      if [[ ! "$GROUP_ID_INPUT" =~ ^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$ ]]; then
+        echo -e "${RED}Invalid package name. Use reverse domain notation (e.g., com.example.myapp).${CLR}"
+        continue
+      fi
+      GROUP_ID="$GROUP_ID_INPUT"
+      break
+    done
+
     echo
     echo -e "${GRN}Creating ${MAG}$ARCH${GRN} project in directory: ${MAG}$DIR${CLR}"
+    echo -e "${GRN}Using package: ${MAG}$GROUP_ID${CLR}"
     echo
   else
     ARCH="$1"
@@ -3226,18 +5307,14 @@ sboot() {
   GROUP_ID_PATH="${GROUP_ID//.//}"
   local PACKAGE_PATH="$GROUP_ID_PATH/$ARTIFACT_ID"
 
-  # Create proper package structure and enterprise classes
-  create_package_structure "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_main_application_class "$PROJECT_DIR" "$PACKAGE_PATH" "$DIR" || return 1
-  create_security_config "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_global_exception_handler "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_error_response_dto "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_resource_not_found_exception "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_sample_entity "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_sample_repository "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_sample_service "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_sample_controller "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
-  create_sample_dtos "$PROJECT_DIR" "$PACKAGE_PATH" || return 1
+  # Create architecture-specific package structure and enterprise classes
+  create_package_structure "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
+  create_main_application_class "$PROJECT_DIR" "$PACKAGE_PATH" "$DIR" "$ARCH" || return 1
+  create_security_config "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
+  create_global_exception_handler "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
+  create_error_response_dto "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
+  create_resource_not_found_exception "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
+  create_architecture_specific_classes "$PROJECT_DIR" "$PACKAGE_PATH" "$ARCH" || return 1
   create_logging_config "$PROJECT_DIR" || return 1
   create_ai_coding_rules "$PROJECT_DIR" "${AI_ASSISTANT:-cursor}" || return 1
 
