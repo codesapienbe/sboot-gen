@@ -5,9 +5,9 @@ set -euo pipefail
 # ☕️ sboot – enterprise Spring Boot generator with Spring CLI
 #
 # Installation methods:
-#   1. Download and source: source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh)
-#   2. Direct execution: curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
-#   3. Manual install: curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh -o sbootgen.sh && source sbootgen.sh
+#   1. Download and source: source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh)
+#   2. Direct execution: curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash
+#   3. Manual install: curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh -o sbootgen.sh && source sbootgen.sh
 #
 # Usage: sboot <modulith|microservice|monolith> <project-dir>
 ################################################################################
@@ -15,7 +15,7 @@ set -euo pipefail
 # Configuration Constants
 readonly SCRIPT_VERSION="0.0.1"
 readonly SCRIPT_REPO="codesapienbe/sboot-gen"
-readonly SCRIPT_URL="https://raw.githubusercontent.com/${SCRIPT_REPO}/main/sbootgen.sh"
+readonly SCRIPT_URL="https://raw.githubusercontent.com/${SCRIPT_REPO}/CSNET/sbootgen.sh"
 readonly SPRING_BOOT_VERSION="3.2.0"
 readonly JAVA_VERSION="17"
 readonly MAVEN_VERSION="3.8.0"
@@ -6750,7 +6750,7 @@ install_sboot() {
 if [[ -f "$HOME/.sbootgen.sh" ]]; then
   source "$HOME/.sbootgen.sh"
 elif command -v curl >/dev/null 2>&1; then
-  source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh) 2>/dev/null || true
+  source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh) 2>/dev/null || true
 fi
 EOF
 
@@ -6836,15 +6836,15 @@ interactive_install() {
       echo -e "${YLW}Manual Installation Commands:${CLR}"
       echo
       echo -e "${CYN}# Option 1 - Source directly (recommended):${CLR}"
-      echo -e "source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh)"
+      echo -e "source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh)"
       echo
       echo -e "${CYN}# Option 2 - Download and source:${CLR}"
-      echo -e "curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh -o ~/.sbootgen.sh"
+      echo -e "curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh -o ~/.sbootgen.sh"
       echo -e "echo 'source ~/.sbootgen.sh' >> ~/.bashrc && source ~/.bashrc"
       echo
       echo -e "${CYN}# Option 3 - Add to profile manually:${CLR}"
       echo -e "echo '# sboot - Spring Boot Generator' >> ~/.bashrc"
-      echo -e "echo 'source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh)' >> ~/.bashrc"
+      echo -e "echo 'source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh)' >> ~/.bashrc"
       echo
       ;;
     q|Q)
@@ -6892,8 +6892,8 @@ main() {
       show_install_banner
       print_usage
       echo
-      echo -e "${YLW}💡 Tip: Run 'curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash -s -- <command>'${CLR}"
-      echo -e "${YLW}   Or:  'bash <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh) <command>'${CLR}"
+      echo -e "${YLW}💡 Tip: Run 'curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash -s -- <command>'${CLR}"
+      echo -e "${YLW}   Or:  'bash <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh) <command>'${CLR}"
       exit 0
     fi
   fi

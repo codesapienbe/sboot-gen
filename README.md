@@ -335,7 +335,7 @@ curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.
 
 #### **Method 2: Permanent Installation (Optional)**
 ```bash
-curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash
 ```
 - Downloads script to `/tmp` first (safe)
 - Installs to `~/.sbootgen.sh` permanently
@@ -344,7 +344,7 @@ curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.s
 
 #### **Method 2: Source Directly**
 ```bash
-source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh)
+source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh)
 ```
 - Downloads and sources script directly
 - Available only in current shell session
@@ -352,7 +352,7 @@ source <(curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/s
 
 #### **Method 3: Interactive Install**
 ```bash
-curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/main/sbootgen.sh | bash
+curl -s https://raw.githubusercontent.com/codesapienbe/sboot-gen/CSNET/sbootgen.sh | bash
 # Then choose installation method when prompted
 ```
 
