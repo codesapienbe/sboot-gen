@@ -45,6 +45,7 @@ AI_ASSISTANT="${AI_ASSISTANT:-cursor}"
 
 # Supported architectures
 readonly SUPPORTED_ARCHITECTURES=("modulith" "microservice" "monolith" "eda-kafka")
+readonly SUPPORTED_CLOUD_PROVIDERS=("aws" "azure" "gcp")
 
 # Color constants
 readonly RED="\033[0;31m" GRN="\033[0;32m" YLW="\033[1;33m"
@@ -650,7 +651,7 @@ get_extra_dependencies() {
   local arch="$1"
   case "$arch" in
     modulith) echo "security,cache,flyway,prometheus,testcontainers" ;;
-    microservice) echo "security,cache,flyway,prometheus,cloud-config,testcontainers" ;;
+    microservice) echo "security,cache,flyway,prometheus,cloud-config,testcontainers,resilience4j" ;;
     monolith) echo "security,cache,flyway,prometheus,testcontainers" ;;
     eda-kafka) echo "kafka,actuator,security,cache,testcontainers" ;;
     *) log_error "Unknown architecture: $arch"; return 1 ;;
@@ -3463,6 +3464,10 @@ spring:
     template:
       default-topic: message-events
 
+# User Service Configuration
+user-service:
+  url: http://localhost:8080
+
 logging:
   level:
     org.springframework.kafka: DEBUG
@@ -3476,6 +3481,69 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+---
+# AWS Profile
+spring:
+  config:
+    activate:
+      on-profile: aws
+  cloud:
+    aws:
+      region: us-east-1
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/producer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
+
+management:
+  metrics:
+    export:
+      cloudwatch:
+        namespace: ProducerService
+        enabled: true
+
+---
+# Azure Profile
+spring:
+  config:
+    activate:
+      on-profile: azure
+  cloud:
+    azure:
+      credential:
+        managed-identity-enabled: true
+      keyvault:
+        enabled: true
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/producer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
+
+---
+# GCP Profile
+spring:
+  config:
+    activate:
+      on-profile: gcp
+  cloud:
+    gcp:
+      project-id: \${GCP_PROJECT_ID}
+      credentials:
+        location: classpath:gcp-credentials.json
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/producer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
 EOF
 }
 
@@ -3516,6 +3584,69 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+---
+# AWS Profile
+spring:
+  config:
+    activate:
+      on-profile: aws
+  cloud:
+    aws:
+      region: us-east-1
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/consumer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
+
+management:
+  metrics:
+    export:
+      cloudwatch:
+        namespace: ConsumerService
+        enabled: true
+
+---
+# Azure Profile
+spring:
+  config:
+    activate:
+      on-profile: azure
+  cloud:
+    azure:
+      credential:
+        managed-identity-enabled: true
+      keyvault:
+        enabled: true
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/consumer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
+
+---
+# GCP Profile
+spring:
+  config:
+    activate:
+      on-profile: gcp
+  cloud:
+    gcp:
+      project-id: \${GCP_PROJECT_ID}
+      credentials:
+        location: classpath:gcp-credentials.json
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/consumer_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+
+kafka:
+  bootstrap-servers: \${KAFKA_BOOTSTRAP_SERVERS}
 EOF
 }
 
@@ -3565,6 +3696,72 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+---
+# AWS Profile
+spring:
+  config:
+    activate:
+      on-profile: aws
+  cloud:
+    aws:
+      region: us-east-1
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/user_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+
+management:
+  metrics:
+    export:
+      cloudwatch:
+        namespace: UserService
+        enabled: true
+
+---
+# Azure Profile
+spring:
+  config:
+    activate:
+      on-profile: azure
+  cloud:
+    azure:
+      credential:
+        managed-identity-enabled: true
+      keyvault:
+        enabled: true
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/user_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+
+---
+# GCP Profile
+spring:
+  config:
+    activate:
+      on-profile: gcp
+  cloud:
+    gcp:
+      project-id: \${GCP_PROJECT_ID}
+      credentials:
+        location: classpath:gcp-credentials.json
+  datasource:
+    url: jdbc:postgresql://\${DB_HOST:localhost}:5432/user_db
+    username: \${DB_USERNAME}
+    password: \${DB_PASSWORD}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
 EOF
 }
 
@@ -3832,6 +4029,7 @@ EOF
 create_producer_config() {
   local service_dir="$1" package_path="$2"
 
+  # Kafka configuration
   cat > "$service_dir/src/main/java/$package_path/config/KafkaConfig.java" << EOF
 package ${package_path//"/"/"."}.config;
 
@@ -3864,6 +4062,7 @@ public class KafkaConfig {
     }
 }
 EOF
+
 }
 
 create_consumer_security_config() {
@@ -4565,6 +4764,365 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 EOF
+
+  # Create GitHub Actions CI/CD workflow
+  mkdir -p "$project_dir/.github/workflows"
+
+  cat > "$project_dir/.github/workflows/ci-cd.yml" << 'EOF'
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  USER_SRV_IMAGE: ${{ github.repository }}/user-srv
+  PRODUCER_SRV_IMAGE: ${{ github.repository }}/producer-srv
+  CONSUMER_SRV_IMAGE: ${{ github.repository }}/consumer-srv
+
+jobs:
+  # Build and Test Shared Module
+  build-shared:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build shared module
+        run: |
+          cd shared
+          mvn clean compile -DskipTests
+
+      - name: Test shared module
+        run: |
+          cd shared
+          mvn test
+
+      - name: Cache shared module
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: shared-${{ hashFiles('shared/pom.xml') }}
+          restore-keys: shared-
+
+  # Build and Test User Service
+  build-user-service:
+    runs-on: ubuntu-latest
+    needs: build-shared
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Install shared module
+        run: |
+          cd shared
+          mvn clean install -DskipTests
+
+      - name: Build user service
+        run: |
+          cd user-srv
+          mvn clean compile -DskipTests
+
+      - name: Test user service
+        run: |
+          cd user-srv
+          mvn test
+
+      - name: Build Docker image
+        run: |
+          docker build -t user-service:latest -f ../Dockerfile ./user-srv
+
+  # Build and Test Producer Service
+  build-producer-service:
+    runs-on: ubuntu-latest
+    needs: build-shared
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Install shared module
+        run: |
+          cd shared
+          mvn clean install -DskipTests
+
+      - name: Build producer service
+        run: |
+          cd producer-srv
+          mvn clean compile -DskipTests
+
+      - name: Test producer service
+        run: |
+          cd producer-srv
+          mvn test
+
+      - name: Build Docker image
+        run: |
+          docker build -t producer-service:latest -f ../Dockerfile ./producer-srv
+
+  # Build and Test Consumer Service
+  build-consumer-service:
+    runs-on: ubuntu-latest
+    needs: build-shared
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Install shared module
+        run: |
+          cd shared
+          mvn clean install -DskipTests
+
+      - name: Build consumer service
+        run: |
+          cd consumer-srv
+          mvn clean compile -DskipTests
+
+      - name: Test consumer service
+        run: |
+          cd consumer-srv
+          mvn test
+
+      - name: Build Docker image
+        run: |
+          docker build -t consumer-service:latest -f ../Dockerfile ./consumer-srv
+
+  # Integration Tests
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [build-user-service, build-producer-service, build-consumer-service]
+    services:
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.4.0
+        ports:
+          - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: confluentinc/cp-kafka:7.4.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        options: >-
+          --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9092"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Install shared module
+        run: |
+          cd shared
+          mvn clean install -DskipTests
+
+      - name: Run integration tests
+        run: |
+          cd producer-srv
+          mvn verify -Dspring.profiles.active=test
+
+      - name: Generate test report
+        run: |
+          mkdir -p test-results
+          find . -name "*.xml" -path "*/target/surefire-reports/*" -exec cp {} test-results/ \;
+        if: always()
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+
+  # Deploy to Cloud (only on main branch)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build-user-service, build-producer-service, build-consumer-service, integration-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push User Service
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.USER_SRV_IMAGE }}:latest -f Dockerfile ./user-srv
+          docker push ${{ env.REGISTRY }}/${{ env.USER_SRV_IMAGE }}:latest
+
+      - name: Build and push Producer Service
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.PRODUCER_SRV_IMAGE }}:latest -f Dockerfile ./producer-srv
+          docker push ${{ env.REGISTRY }}/${{ env.PRODUCER_SRV_IMAGE }}:latest
+
+      - name: Build and push Consumer Service
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.CONSUMER_SRV_IMAGE }}:latest -f Dockerfile ./consumer-srv
+          docker push ${{ env.REGISTRY }}/${{ env.CONSUMER_SRV_IMAGE }}:latest
+
+      - name: Deploy to AWS (Example)
+        if: contains(github.event.head_commit.message, '--aws')
+        run: |
+          echo "Deploying to AWS..."
+          # Add your AWS deployment commands here
+          # aws ecs update-service --cluster your-cluster --service your-service --force-new-deployment
+
+      - name: Deploy to Azure (Example)
+        if: contains(github.event.head_commit.message, '--azure')
+        run: |
+          echo "Deploying to Azure..."
+          # Add your Azure deployment commands here
+          # az containerapp update --name your-app --resource-group your-rg --image your-image
+
+      - name: Deploy to GCP (Example)
+        if: contains(github.event.head_commit.message, '--gcp')
+        run: |
+          echo "Deploying to GCP..."
+          # Add your GCP deployment commands here
+          # gcloud run deploy your-service --image your-image --platform managed
+
+  # Security Scan
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-shared
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run OWASP Dependency Check
+        run: |
+          cd shared
+          mvn org.owasp:dependency-check-maven:check
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+EOF
+}
+
+create_resilience_config() {
+  local project_dir="$1" package_path="$2"
+
+  cat > "$project_dir/src/main/java/$package_path/resilience/ResilienceConfig.java" << EOF
+package ${package_path//"/"/"."}.resilience;
+
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.time.Duration;
+
+/**
+ * Circuit Breaker and Retry configuration for Microservice architecture.
+ * Used for resilient communication with other microservices.
+ */
+@Configuration
+public class ResilienceConfig {
+
+    @Bean
+    public CircuitBreakerConfig circuitBreakerConfig() {
+        return CircuitBreakerConfig.custom()
+            .failureRateThreshold(50) // Open circuit when 50% of calls fail
+            .waitDurationInOpenState(Duration.ofMillis(10000)) // Wait 10s before trying again
+            .slidingWindowSize(10) // Consider last 10 calls
+            .minimumNumberOfCalls(5) // Need at least 5 calls before opening
+            .slowCallRateThreshold(50) // Open if 50% of calls are slow
+            .slowCallDurationThreshold(Duration.ofSeconds(2)) // Calls taking >2s are slow
+            .build();
+    }
+
+    @Bean
+    public CircuitBreaker externalServiceCircuitBreaker(CircuitBreakerConfig circuitBreakerConfig) {
+        return CircuitBreakerRegistry.of(circuitBreakerConfig)
+            .circuitBreaker("externalServiceCircuitBreaker");
+    }
+
+    @Bean
+    public RetryConfig retryConfig() {
+        return RetryConfig.custom()
+            .maxAttempts(3) // Retry up to 3 times
+            .waitDuration(Duration.ofMillis(500)) // Wait 500ms between retries
+            .retryExceptions(Exception.class) // Retry on any exception
+            .build();
+    }
+
+    @Bean
+    public Retry externalServiceRetry(RetryConfig retryConfig) {
+        return Retry.of("externalServiceRetry", retryConfig);
+    }
+}
+EOF
 }
 
 create_domain_service() {
@@ -5172,6 +5730,20 @@ sboot() {
       ;;
   esac
 
+  # Parse cloud provider arguments
+  local CLOUD_PROVIDER=""
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --aws|--azure|--gcp)
+        CLOUD_PROVIDER="${1#--}"
+        shift
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   # Parse arguments or prompt interactively
   local ARCH DIR GROUP_ID_INPUT
   if [[ $# -lt 2 ]]; then
@@ -5247,10 +5819,13 @@ sboot() {
       break
     done
 
-    echo
-    echo -e "${GRN}Creating ${MAG}$ARCH${GRN} project in directory: ${MAG}$DIR${CLR}"
-    echo -e "${GRN}Using package: ${MAG}$GROUP_ID${CLR}"
-    echo
+  echo
+  echo -e "${GRN}Creating ${MAG}$ARCH${GRN} project in directory: ${MAG}$DIR${CLR}"
+  echo -e "${GRN}Using package: ${MAG}$GROUP_ID${CLR}"
+  if [[ -n "$CLOUD_PROVIDER" ]]; then
+    echo -e "${GRN}Cloud provider: ${MAG}$CLOUD_PROVIDER${CLR}"
+  fi
+  echo
   else
     ARCH="$1"
     DIR="$2"

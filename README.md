@@ -1051,6 +1051,9 @@ bash -n sbootgen.sh
 - **JWT Authentication**: Cross-service authentication with role-based access
 - **JSON Message Processing**: String keys, JSON values with Kafka
 - **Docker Orchestration**: Complete multi-service setup with Kafka/Zookeeper
+- **Circuit Breaker**: Resilience4j Circuit Breaker for microservice HTTP communication (not Kafka)
+- **GitHub Actions CI/CD**: Complete pipeline with build, test, security scan, and deployment
+- **Cloud Deployment**: Ready-to-deploy configurations for AWS, Azure, and GCP
 
 
 ## 🎯 Roadmap
@@ -1332,6 +1335,184 @@ POST /api/v1/producer/test   # Send test message
 - **producer/producer123**: PRODUCER role (message sending)
 - **consumer/consumer123**: CONSUMER role (message receiving)
 
+## 🔄 **Circuit Breaker Protection**
+
+### **Microservice Architecture**
+The `--microservice` architecture includes Resilience4j Circuit Breaker for resilient communication with other services:
+
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      externalServiceCircuitBreaker:
+        baseConfig: default
+  retry:
+    instances:
+      externalServiceRetry:
+        baseConfig: default
+```
+
+### **Circuit Breaker Features**
+- **Failure Threshold**: Opens after 50% failure rate
+- **Recovery Time**: 10-second wait before retrying
+- **Monitoring**: Health endpoint shows circuit breaker status
+- **Fallback Methods**: Graceful degradation when services fail
+
+### **Why Not in EDA-Kafka?**
+Kafka doesn't need circuit breakers because:
+- **Built-in Retry**: Kafka producers have automatic retry mechanisms
+- **Acknowledgment**: Consumers can handle message redelivery
+- **Async Communication**: Event-driven architecture is naturally resilient
+- **Circuit Breakers**: Are for synchronous HTTP calls between services
+
+### **Usage in Microservice Architecture**
+```java
+@CircuitBreaker(name = "externalServiceCircuitBreaker", fallbackMethod = "fallback")
+@Retry(name = "externalServiceRetry")
+public String callExternalService() {
+    // HTTP call to another microservice
+    return restTemplate.getForObject("http://other-service/api", String.class);
+}
+
+public String fallback(Exception e) {
+    return "Service temporarily unavailable";
+}
+```
+
+## 🚀 **CI/CD Pipeline**
+
+### **GitHub Actions Workflow**
+The generated project includes a comprehensive CI/CD pipeline:
+
+```yaml
+# .github/workflows/ci-cd.yml
+- Build & Test: Multi-service Maven builds
+- Integration Tests: Kafka-based testing
+- Security Scan: OWASP & Trivy vulnerability scanning
+- Docker Build: Multi-stage container builds
+- Cloud Deployment: AWS/Azure/GCP deployment options
+```
+
+### **Pipeline Stages**
+1. **Build Shared Module** - Common entities and DTOs
+2. **Build Services** - Parallel service builds
+3. **Integration Tests** - Full-stack testing with Kafka
+4. **Security Scan** - Dependency and container scanning
+5. **Deploy** - Cloud-specific deployment (main branch only)
+
+### **Deployment Triggers**
+```bash
+# Deploy to AWS
+git commit -m "Deploy to AWS" --allow-empty
+git push origin main
+
+# Deploy to Azure
+git commit -m "Deploy to Azure" --allow-empty
+git push origin main
+
+# Deploy to GCP
+git commit -m "Deploy to GCP" --allow-empty
+git push origin main
+```
+
+## ☁️ **Cloud Deployment Options**
+
+### **Command Line Usage**
+```bash
+# Create project with cloud provider configuration
+sboot --aws eda-kafka my-project
+sboot --azure eda-kafka my-project
+sboot --gcp eda-kafka my-project
+```
+
+### **AWS Configuration**
+```yaml
+spring:
+  profiles: aws
+  cloud:
+    aws:
+      region: us-east-1
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:5432/service_db
+kafka:
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+management:
+  metrics:
+    export:
+      cloudwatch:
+        enabled: true
+```
+
+### **Azure Configuration**
+```yaml
+spring:
+  profiles: azure
+  cloud:
+    azure:
+      credential:
+        managed-identity-enabled: true
+      keyvault:
+        enabled: true
+```
+
+### **GCP Configuration**
+```yaml
+spring:
+  profiles: gcp
+  cloud:
+    gcp:
+      project-id: ${GCP_PROJECT_ID}
+      credentials:
+        location: classpath:gcp-credentials.json
+```
+
+### **Environment Variables**
+Set these environment variables for cloud deployments:
+
+#### **AWS**
+```bash
+export DB_HOST=your-rds-endpoint
+export DB_USERNAME=your-db-user
+export DB_PASSWORD=your-db-password
+export KAFKA_BOOTSTRAP_SERVERS=your-msk-endpoint
+```
+
+#### **Azure**
+```bash
+export DB_HOST=your-postgres-server
+export DB_USERNAME=your-db-user
+export DB_PASSWORD=your-db-password
+export KAFKA_BOOTSTRAP_SERVERS=your-event-hubs-connection
+```
+
+#### **GCP**
+```bash
+export GCP_PROJECT_ID=your-project-id
+export DB_HOST=your-cloud-sql-instance
+export DB_USERNAME=your-db-user
+export DB_PASSWORD=your-db-password
+export KAFKA_BOOTSTRAP_SERVERS=your-pubsub-connection
+```
+
+### **Docker Deployment**
+All services include Docker support with multi-stage builds:
+```dockerfile
+# Build stage
+FROM maven:3.9-eclipse-temurin-17 AS build
+# ... build JAR
+
+# Runtime stage
+FROM eclipse-temurin:17-jre-alpine AS runtime
+# ... run application
+```
+
+### **Cloud-Native Features**
+- **Externalized Configuration**: Environment-based config
+- **Cloud Databases**: PostgreSQL on cloud providers
+- **Managed Kafka**: AWS MSK, Azure Event Hubs, GCP Pub/Sub
+- **Monitoring**: Cloud-specific metrics export
+- **Security**: Cloud IAM integration
+
 ### **Key Components**
 
 #### **Microservices Architecture**
@@ -1351,6 +1532,12 @@ POST /api/v1/producer/test   # Send test message
 - **Role-based Access**: PRODUCER, CONSUMER, ADMIN roles
 - **Token Validation**: Cross-service authentication
 - **Secure Endpoints**: Protected APIs with method-level security
+
+#### **Resilience & Reliability**
+- **Circuit Breaker**: Resilience4j Circuit Breaker for inter-service calls
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Fallback Methods**: Graceful degradation when services are down
+- **Health Monitoring**: Circuit breaker status in actuator endpoints
 
 #### **Infrastructure**
 - **Apache Kafka**: Message broker with Zookeeper
